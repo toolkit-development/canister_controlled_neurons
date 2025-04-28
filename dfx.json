@@ -1,0 +1,21 @@
+{
+  "canisters": {
+    "canister_controlled_neuron": {
+      "candid": "canister_controlled_neuron.did",
+      "package": "canister_controlled_neuron",
+      "type": "custom",
+      "wasm": "wasm/canister_controlled_neuron.wasm.gz",
+      "build": [
+        "bash scripts/build.sh"
+      ]
+    }
+  },
+  "defaults": {
+    "build": {
+      "args": "",
+      "packtool": ""
+    }
+  },
+  "output_env_file": ".env",
+  "version": 1
+}
