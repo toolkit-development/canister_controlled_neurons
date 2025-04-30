@@ -1,21 +1,28 @@
-[package]
-name = "canister_controlled_neuron"
-description = "A canister to control neurons"
-version = "0.1.0"
-authors = ["rem.codes"]
-license = "MIT"
-edition = "2021"
+[workspace]
+members = [
+    "src/test_helper",
+    "src/canister_controlled_neuron",
+    ]
+resolver = "2"
 
-[lib]
-crate-type = ["cdylib"]
-path="src/lib.rs"
+[workspace.dependencies]
+candid = "^0.10.13"
+ic-cdk = "^0.18.0"
+ic-stable-structures = "^0.6.8"
+serde = { version = "^1.0", features = ["derive"] }
+serde_json = "^1.0"
+ic-cdk-timers = "^0.12.0"
+validator = "^0.20.0"
 
 
-[dependencies]
-candid = "0.10.13"
-ic-cdk = "0.18.0"
-ic-stable-structures = "0.6.8"
-sha2 = "0.10.0"
-serde = { version = "1.0.219", features = ["derive"] }
-ic-ledger-types = "0.15.0"
+pocket-ic = "8.0.0"
+ic-management-canister-types = "0.2.1"
 toolkit-utils = {path = "../toolkit_utils"}
+ic-ledger-types = "0.15.0"
+sha2 = "0.10.8"
+
+test_helper = {path = "src/test_helper"}
+
+
+
+

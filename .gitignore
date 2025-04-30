@@ -12,6 +12,7 @@
 
 # generated files
 **/declarations/
+**/nns_state/
 
 # rust
 target/

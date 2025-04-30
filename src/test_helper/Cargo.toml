@@ -1,0 +1,26 @@
+[package]
+name = "test_helper"
+version = "0.1.0"
+authors = ["rem.codes"]
+license = "GNU"
+edition = "2021"
+
+[lib]
+crate-type = ["rlib", "cdylib"]
+path="lib.rs"
+
+[dependencies]
+candid = {workspace = true}
+pocket-ic ={ workspace = true}
+serde = {workspace = true}
+toolkit-utils = { workspace = true}
+ic-management-canister-types = {workspace = true}
+rand = "0.9.1"
+canister_controlled_neuron = {path = "../canister_controlled_neuron"}
+
+
+
+
+
+
+

@@ -1,0 +1,27 @@
+[package]
+name = "canister_controlled_neuron"
+description = "A canister to control neurons"
+version = "0.1.0"
+authors = ["rem.codes"]
+license = "MIT"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+path="lib.rs"
+
+
+[dependencies]
+candid = {workspace = true}
+ic-cdk = {workspace = true}
+ic-stable-structures = {workspace = true}
+ic-cdk-timers = {workspace = true}
+sha2 = {workspace = true}
+serde = { workspace = true}
+serde_json = {workspace = true}
+ic-ledger-types = {workspace = true}
+toolkit-utils = {workspace = true}
+
+[dev-dependencies]
+pocket-ic = {workspace = true}
+test_helper = {workspace = true}
