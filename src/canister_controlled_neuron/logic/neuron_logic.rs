@@ -1,6 +1,4 @@
-use std::time::Duration;
-
-use ic_cdk::{api::time, futures::spawn};
+use ic_cdk::api::time;
 use toolkit_utils::{
     api_error::ApiError,
     result::CanisterResult,
@@ -15,15 +13,8 @@ use crate::{
             Neuron as GovNeuron,
         },
     },
-    storage::neuron_reference_storage::NeuronReferenceStore,
-    timers::storages::{Timers, COUNTER},
-    traits::timer_traits::TimerActions,
-    types::{
-        modules::DisburseMaturityType,
-        neuron_reference::{
-            NeuronReference, NeuronReferenceResponse, PostCustomTargetmaturityDisbursement,
-        },
-    },
+    storage::{log_storage::LogStore, neuron_reference_storage::NeuronReferenceStore},
+    types::neuron_reference::{NeuronReference, NeuronReferenceResponse},
 };
 
 pub struct NeuronLogic;
@@ -44,38 +35,74 @@ impl NeuronLogic {
 
     pub async fn create_neuron(
         amount_e8s: u64,
-        maturity_disbursement_target: Option<PostCustomTargetmaturityDisbursement>,
+        auto_stake: Option<bool>,
+        dissolve_delay: Option<u64>,
     ) -> CanisterResult<NeuronReferenceResponse> {
-        let neuron = NeuronReference::new(amount_e8s, maturity_disbursement_target.clone()).await?;
+        let neuron = NeuronReference::new(amount_e8s).await.map_err(|e| {
+            let _ = LogStore::insert(format!("{}: Error creating neuron: {}", time(), e));
+            e
+        })?;
         let (id, mut neuron) = NeuronReferenceStore::insert(neuron.clone())?;
 
-        let claimed_neuron = neuron.claim_or_refresh().await?;
+        let claimed_neuron = neuron.claim_or_refresh().await.map_err(|e| {
+            let _ = LogStore::insert(format!(
+                "{}: Error claiming or refreshing neuron: {}",
+                time(),
+                e
+            ));
+            e
+        })?;
         let response = NeuronReferenceStore::update(id, claimed_neuron)?;
 
-        if let Some(maturity_disbursement) = response.1.maturity_disbursements.clone() {
-            let neuron_clone = response.1.clone();
-            Timers::create_recurring(
-                &neuron.subaccount,
-                Duration::from_secs(maturity_disbursement.interval_seconds),
-                move || {
-                    let neuron = neuron_clone.clone(); // clone inside the closure
-                    spawn(async move { neuron.disburse_maturity().await });
-                },
-            );
+        if let Some(dissolve_delay) = dissolve_delay {
+            neuron
+                .increase_dissolve_delay(dissolve_delay)
+                .await
+                .map_err(|e| {
+                    let _ = LogStore::insert(format!(
+                        "{}: Error setting dissolve delay: {}",
+                        time(),
+                        e
+                    ));
+                    e
+                })?;
+        }
+
+        if let Some(auto_stake) = auto_stake {
+            neuron.auto_stake_maturity(auto_stake).await.map_err(|e| {
+                let _ = LogStore::insert(format!(
+                    "{}: Error setting auto stake maturity: {}",
+                    time(),
+                    e
+                ));
+                e
+            })?;
         }
 
         Ok(response.1.to_response(response.0))
     }
 
-    // after this call `claim_or_refresh_neuron` should be called
     pub async fn top_up_neuron_by_subaccount(
         subaccount: [u8; 32],
         amount_e8s: u64,
-    ) -> CanisterResult<u64> {
-        let (_, neuron) = NeuronReferenceStore::get_by_subaccount(subaccount)?;
+    ) -> CanisterResult<bool> {
+        let (_, mut neuron) = NeuronReferenceStore::get_by_subaccount(subaccount)?;
 
-        let blockheight = neuron.top_up(amount_e8s).await?;
-        Ok(blockheight)
+        let _ = neuron.top_up(amount_e8s).await.map_err(|e| {
+            let _ = LogStore::insert(format!("{}: Error topping up neuron: {}", time(), e));
+            e
+        })?;
+
+        neuron.claim_or_refresh().await.map_err(|e| {
+            let _ = LogStore::insert(format!(
+                "{}: Error claiming or refreshing neuron: {}",
+                time(),
+                e
+            ));
+            e
+        })?;
+
+        Ok(true)
     }
 
     pub async fn command_neuron(
@@ -83,43 +110,40 @@ impl NeuronLogic {
         command: ManageNeuronCommandRequest,
     ) -> CanisterResult<ManageNeuronResponse> {
         let (_, neuron) = NeuronReferenceStore::get_by_subaccount(subaccount)?;
-        let neuron = neuron.command(command).await?;
+        let neuron = neuron.command(command).await.map_err(|e| {
+            let _ = LogStore::insert(format!("{}: Error commanding neuron: {}", time(), e));
+            e
+        })?;
         Ok(neuron)
     }
 
-    pub async fn set_maturity_disbursements(
+    pub async fn add_dissolve_delay(
         subaccount: [u8; 32],
-        maturity_disbursements: DisburseMaturityType,
-    ) -> CanisterResult<NeuronReferenceResponse> {
-        let (id, mut neuron) = NeuronReferenceStore::get_by_subaccount(subaccount)?;
-        let updated_neuron = neuron.set_maturity_disbursements(maturity_disbursements)?;
+        dissolve_delay: u64,
+    ) -> CanisterResult<bool> {
+        let (_, neuron) = NeuronReferenceStore::get_by_subaccount(subaccount)?;
+        neuron.increase_dissolve_delay(dissolve_delay).await?;
+        let _ = LogStore::insert(format!("Dissolve delay set to {} seconds", dissolve_delay));
+        Ok(true)
+    }
 
-        match updated_neuron.maturity_disbursements.clone() {
-            Some(maturity_disbursements) => {
-                let neuron_clone = updated_neuron.clone();
-                Timers::create_recurring(
-                    &subaccount,
-                    Duration::from_secs(maturity_disbursements.interval_seconds),
-                    move || {
-                        let mut neuron = neuron_clone.clone();
-                        neuron.last_disbursements_time_nanos = Some(time());
-                        let _ = NeuronReferenceStore::update(id, neuron.clone());
-                        COUNTER.with_borrow_mut(|counter| {
-                            *counter += 1;
-                        });
-                        // Not sure is this is going to work, but it's the only way I can think of to update the neuron
-                        // spawn(async move {
-                        //     neuron.disburse_maturity().await;
-                        // });
-                    },
-                );
-            }
-            None => {
-                Timers::clear(&subaccount);
-            }
-        }
-        let (id, neuron) = NeuronReferenceStore::update(id, updated_neuron)?;
-        Ok(neuron.to_response(id))
+    pub async fn set_dissolve_state(
+        subaccount: [u8; 32],
+        start_dissolving: bool,
+    ) -> CanisterResult<bool> {
+        let (_, neuron) = NeuronReferenceStore::get_by_subaccount(subaccount)?;
+        neuron.set_dissolve_state(start_dissolving).await?;
+        Ok(true)
+    }
+
+    pub async fn auto_stake_maturity(
+        subaccount: [u8; 32],
+        auto_stake: bool,
+    ) -> CanisterResult<bool> {
+        let (_, neuron) = NeuronReferenceStore::get_by_subaccount(subaccount)?;
+        neuron.auto_stake_maturity(auto_stake).await?;
+        let _ = LogStore::insert(format!("Auto stake maturity set to {}", auto_stake));
+        Ok(true)
     }
 
     pub async fn get_full_neuron(subaccount: [u8; 32]) -> CanisterResult<GovNeuron> {

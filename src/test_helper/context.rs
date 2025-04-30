@@ -22,7 +22,7 @@ pub static OWNER_PRINCIPAL: &str =
 pub struct Context {
     pub pic: PocketIc,
     pub owner_account: Account,
-    pub canister_controlled_neuron_canister: Principal,
+    pub neuron_controller_canister: Principal,
     pub config: Config,
 }
 
@@ -89,13 +89,11 @@ impl Context {
         let context = Context {
             pic,
             owner_account,
-            canister_controlled_neuron_canister,
+            neuron_controller_canister: canister_controlled_neuron_canister,
             config,
         };
 
         context.mint_icp(100_000_000_000_000_000, owner_account.owner);
-        let balance = context.get_icp_balance(owner_account.owner).unwrap();
-        println!("Balance: {}", balance);
         context
     }
 
@@ -107,7 +105,7 @@ impl Context {
     ) -> Result<T, String> {
         let args = args.unwrap_or(encode_args(()).unwrap());
         let res = self.pic.query_call(
-            self.canister_controlled_neuron_canister,
+            self.neuron_controller_canister,
             sender.principal(),
             method,
             args,
@@ -127,7 +125,7 @@ impl Context {
     ) -> Result<T, String> {
         let args = args.unwrap_or(encode_args(()).unwrap());
         let res = self.pic.update_call(
-            self.canister_controlled_neuron_canister,
+            self.neuron_controller_canister,
             sender.principal(),
             method,
             args,
@@ -156,6 +154,26 @@ impl Context {
             .update_call(
                 MAINNET_LEDGER_CANISTER_ID,
                 MAINNET_GOVERNANCE_CANISTER_ID,
+                "icrc1_transfer",
+                encode_args((transfer_args,)).unwrap(),
+            )
+            .expect("Failed to call canister");
+    }
+
+    pub fn transfer_icp(&self, amount: u64, from: Account, to: Account) {
+        let transfer_args = TransferArg {
+            from_subaccount: None,
+            to,
+            fee: None,
+            created_at_time: None,
+            memo: None,
+            amount: Nat::from(amount),
+        };
+
+        self.pic
+            .update_call(
+                MAINNET_LEDGER_CANISTER_ID,
+                from.owner,
                 "icrc1_transfer",
                 encode_args((transfer_args,)).unwrap(),
             )

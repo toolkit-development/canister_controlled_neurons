@@ -4,25 +4,20 @@ use ic_ledger_types::{
     MAINNET_GOVERNANCE_CANISTER_ID, MAINNET_LEDGER_CANISTER_ID,
 };
 use serde::{Deserialize, Serialize};
-use toolkit_utils::{
-    api_error::ApiError, cell::CellStorage, impl_storable_for, misc::generic::Time,
-    result::CanisterResult,
-};
+use toolkit_utils::{api_error::ApiError, impl_storable_for, result::CanisterResult};
 
 use crate::{
     api::{
         api_clients::ApiClients,
         icp_governance_api::{
-            Account, By, ClaimOrRefresh, ClaimOrRefreshResponse, Command1, DisburseMaturity,
-            ManageNeuronCommandRequest, ManageNeuronRequest, ManageNeuronResponse,
-            Neuron as GovNeuron, NeuronId, Result2,
+            By, ChangeAutoStakeMaturity, ClaimOrRefresh, ClaimOrRefreshResponse, Command1,
+            Configure, IncreaseDissolveDelay, ManageNeuronCommandRequest, ManageNeuronRequest,
+            ManageNeuronResponse, Neuron as GovNeuron, NeuronId, Operation, Result2,
         },
     },
     helpers::subaccount_helper::generate_subaccount_by_nonce,
-    storage::{config_storage::config_store, neuron_reference_storage::NeuronReferenceStore},
+    storage::neuron_reference_storage::NeuronReferenceStore,
 };
-
-use super::modules::DisburseMaturityType;
 
 impl_storable_for!(NeuronReference);
 
@@ -32,40 +27,10 @@ pub struct NeuronReference {
     pub subaccount: [u8; 32],
     pub nonce: u64,
     pub neuron_id: Option<u64>,
-    pub maturity_disbursements: Option<MaturityDisbursement>,
-    pub last_disbursements_time_nanos: Option<Time>,
-}
-
-#[derive(Debug, Serialize, Deserialize, CandidType, Clone)]
-pub struct MaturityDisbursement {
-    pub interval_seconds: u64,
-    pub targets: Vec<DisburseMaturity>,
-}
-
-impl From<PostCustomTargetmaturityDisbursement> for MaturityDisbursement {
-    fn from(post_maturity_disbursement: PostCustomTargetmaturityDisbursement) -> Self {
-        MaturityDisbursement {
-            interval_seconds: post_maturity_disbursement.interval_seconds,
-            targets: vec![post_maturity_disbursement.target],
-        }
-    }
-}
-#[derive(Debug, Serialize, Deserialize, CandidType, Clone)]
-pub struct PostCustomTargetmaturityDisbursement {
-    pub interval_seconds: u64,
-    pub target: DisburseMaturity,
-}
-
-#[derive(Debug, Serialize, Deserialize, CandidType, Clone)]
-pub struct PostTreasuryTargetmaturityDisbursement {
-    pub interval_seconds: u64,
 }
 
 impl NeuronReference {
-    pub async fn new(
-        amount_e8s: u64,
-        maturity_disbursement_target: Option<PostCustomTargetmaturityDisbursement>,
-    ) -> CanisterResult<NeuronReference> {
+    pub async fn new(amount_e8s: u64) -> CanisterResult<NeuronReference> {
         let fee = 10_000;
 
         if amount_e8s < 100_000_000 + fee {
@@ -99,8 +64,6 @@ impl NeuronReference {
             subaccount,
             nonce,
             neuron_id: None,
-            maturity_disbursements: maturity_disbursement_target.map(MaturityDisbursement::from),
-            last_disbursements_time_nanos: None,
         };
 
         Ok(neuron)
@@ -154,45 +117,45 @@ impl NeuronReference {
             .map_err(|e| ApiError::external_service_error(e.to_string().as_str()))
     }
 
-    pub fn set_maturity_disbursements(
-        &mut self,
-        maturity_disbursements: DisburseMaturityType,
-    ) -> CanisterResult<NeuronReference> {
-        match maturity_disbursements {
-            DisburseMaturityType::Stop => {
-                self.maturity_disbursements = None;
-                Ok(self.clone())
-            }
-            DisburseMaturityType::StartCustomTarget(args) => {
-                self.maturity_disbursements = Some(MaturityDisbursement::from(args));
-                Ok(self.clone())
-            }
-            DisburseMaturityType::StartTreasuryTarget(args) => {
-                let config = config_store().get()?;
-
-                self.maturity_disbursements = Some(MaturityDisbursement {
-                    interval_seconds: args.interval_seconds,
-                    targets: vec![DisburseMaturity {
-                        to_account: Some(Account {
-                            owner: Some(config.governance_canister_id),
-                            subaccount: None,
-                        }),
-                        percentage_to_disburse: 100,
-                    }],
-                });
-                Ok(self.clone())
-            }
-        }
+    pub async fn configure(&self, operation: Operation) -> CanisterResult<ManageNeuronResponse> {
+        self.command(ManageNeuronCommandRequest::Configure(Configure {
+            operation: Some(operation),
+        }))
+        .await
     }
 
-    pub async fn disburse_maturity(&self) {
-        if let Some(maturity_disbursements) = self.maturity_disbursements.clone() {
-            for target in maturity_disbursements.targets.into_iter() {
-                let _ = self
-                    .command(ManageNeuronCommandRequest::DisburseMaturity(target))
-                    .await;
-            }
+    pub async fn increase_dissolve_delay(
+        &self,
+        dissolve_delay: u64,
+    ) -> CanisterResult<ManageNeuronResponse> {
+        self.configure(Operation::IncreaseDissolveDelay(IncreaseDissolveDelay {
+            additional_dissolve_delay_seconds: dissolve_delay as u32,
+        }))
+        .await
+    }
+
+    pub async fn auto_stake_maturity(
+        &self,
+        auto_stake: bool,
+    ) -> CanisterResult<ManageNeuronResponse> {
+        self.configure(Operation::ChangeAutoStakeMaturity(
+            ChangeAutoStakeMaturity {
+                requested_setting_for_auto_stake_maturity: auto_stake,
+            },
+        ))
+        .await
+    }
+
+    pub async fn set_dissolve_state(
+        &self,
+        start_dissolving: bool,
+    ) -> CanisterResult<ManageNeuronResponse> {
+        if start_dissolving {
+            self.configure(Operation::StartDissolving {})
+        } else {
+            self.configure(Operation::StopDissolving {})
         }
+        .await
     }
 
     pub async fn command(
@@ -250,8 +213,6 @@ impl NeuronReference {
             subaccount: self.subaccount,
             nonce: self.nonce,
             neuron_id: self.neuron_id,
-            maturity_disbursements: self.maturity_disbursements.clone(),
-            last_disbursements_time_nanos: self.last_disbursements_time_nanos,
         }
     }
 }
@@ -263,6 +224,4 @@ pub struct NeuronReferenceResponse {
     pub subaccount: [u8; 32],
     pub nonce: u64,
     pub neuron_id: Option<u64>,
-    pub maturity_disbursements: Option<MaturityDisbursement>,
-    pub last_disbursements_time_nanos: Option<Time>,
 }

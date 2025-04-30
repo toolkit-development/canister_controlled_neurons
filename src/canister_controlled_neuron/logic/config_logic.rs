@@ -1,8 +1,9 @@
 use candid::Principal;
-use toolkit_utils::{cell::CellStorage, result::CanisterResult};
+use toolkit_utils::{api_error::ApiError, cell::CellStorage, result::CanisterResult};
 
 use crate::{
-    storage::config_storage::config_store,
+    methods::neuron_methods::get_canister_icp_balance,
+    storage::{config_storage::config_store, neuron_reference_storage::NeuronReferenceStore},
     types::{
         config::Config,
         modules::{
@@ -35,7 +36,8 @@ impl ConfigLogic {
                         IcpNeuronArgs::Create(args) => {
                             let result = NeuronLogic::create_neuron(
                                 args.amount_e8s,
-                                args.maturity_disbursement_target,
+                                args.auto_stake,
+                                args.dissolve_delay_seconds,
                             )
                             .await?;
                             Ok(ModuleResponse::Neuron(Box::new(result)))
@@ -46,18 +48,82 @@ impl ConfigLogic {
                                 args.amount_e8s,
                             )
                             .await?;
-                            Ok(ModuleResponse::BlockHeight(result))
+                            Ok(ModuleResponse::Boolean(result))
                         }
-                        IcpNeuronArgs::Command(args) => {
-                            let result =
-                                NeuronLogic::command_neuron(args.subaccount, args.command).await?;
-                            Ok(ModuleResponse::ManageNeuronResponse(Box::new(result)))
+                        IcpNeuronArgs::AddDissolveDelay(args) => {
+                            let result = NeuronLogic::add_dissolve_delay(
+                                args.subaccount,
+                                args.dissolve_delay_seconds,
+                            )
+                            .await?;
+                            Ok(ModuleResponse::Boolean(result))
                         }
-                        IcpNeuronArgs::DisburseMaturity(args) => {
+                        IcpNeuronArgs::SetDissolveState(args) => {
+                            let result = NeuronLogic::set_dissolve_state(
+                                args.subaccount,
+                                args.start_dissolving,
+                            )
+                            .await?;
+                            Ok(ModuleResponse::Boolean(result))
+                        }
+                        IcpNeuronArgs::AutoStake(args) => {
                             let result =
-                                NeuronLogic::set_maturity_disbursements(args.subaccount, args.args)
+                                NeuronLogic::auto_stake_maturity(args.subaccount, args.auto_stake)
                                     .await?;
-                            Ok(ModuleResponse::Neuron(Box::new(result)))
+                            Ok(ModuleResponse::Boolean(result))
+                        }
+                    },
+                },
+            },
+        }
+    }
+    pub async fn validate_set_module(module: Module) -> CanisterResult<String> {
+        match module {
+            Module::TreasuryManagement(module) => match module {
+                TreasuryManagementModuleType::Neuron(neuron) => match neuron {
+                    NeuronType::Icp(args) => match args {
+                        IcpNeuronArgs::Create(args) => {
+                            let balance = get_canister_icp_balance().await?;
+                            if balance < args.amount_e8s {
+                                return Err(ApiError::bad_request("Insufficient balance"));
+                            }
+
+                            if args.amount_e8s < 100_010_000 {
+                                return Err(ApiError::bad_request(
+                                    "Amount must be greater than 1 ICP + fee",
+                                ));
+                            }
+                            Ok(serde_json::to_string(&args).unwrap())
+                        }
+                        IcpNeuronArgs::TopUp(args) => {
+                            NeuronReferenceStore::get_by_subaccount(args.subaccount)?;
+                            NeuronLogic::get_full_neuron(args.subaccount).await?;
+                            let balance = get_canister_icp_balance().await?;
+                            if balance < args.amount_e8s {
+                                return Err(ApiError::bad_request("Insufficient balance"));
+                            }
+
+                            if args.amount_e8s < 100_010_000 {
+                                return Err(ApiError::bad_request(
+                                    "Amount must be greater than 1 ICP + fee",
+                                ));
+                            }
+                            Ok(serde_json::to_string(&args).unwrap())
+                        }
+                        IcpNeuronArgs::AddDissolveDelay(args) => {
+                            NeuronReferenceStore::get_by_subaccount(args.subaccount)?;
+                            NeuronLogic::get_full_neuron(args.subaccount).await?;
+                            Ok(serde_json::to_string(&args).unwrap())
+                        }
+                        IcpNeuronArgs::SetDissolveState(args) => {
+                            NeuronReferenceStore::get_by_subaccount(args.subaccount)?;
+                            NeuronLogic::get_full_neuron(args.subaccount).await?;
+                            Ok(serde_json::to_string(&args).unwrap())
+                        }
+                        IcpNeuronArgs::AutoStake(args) => {
+                            NeuronReferenceStore::get_by_subaccount(args.subaccount)?;
+                            NeuronLogic::get_full_neuron(args.subaccount).await?;
+                            Ok(serde_json::to_string(&args).unwrap())
                         }
                     },
                 },
