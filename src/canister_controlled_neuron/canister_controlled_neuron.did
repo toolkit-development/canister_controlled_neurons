@@ -153,6 +153,7 @@ type IcpNeuronArgs = variant {
   AutoStake : AutoStakeArgs;
   Spawn : SpawnArgs;
   AddDissolveDelay : AddDissolveDelayArgs;
+  Vote : VoteArgs;
   SetDissolveState : SetDissolveStateArgs;
   TopUp : TopUpNeuronArgs;
   CreateProposal : CreateProposalArgs;
@@ -442,6 +443,8 @@ type UpdateCanisterSettings = record {
   settings : opt CanisterSettings;
 };
 type ValidationResponse = record { field : text; message : text };
+type Vote = variant { Approve; Reject };
+type VoteArgs = record { vote : Vote; subaccount : blob; proposal_id : nat64 };
 type VotingPowerEconomics = record {
   start_reducing_voting_power_after_seconds : opt nat64;
   neuron_minimum_dissolve_delay_to_vote_seconds : opt nat64;
