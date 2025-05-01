@@ -1,6 +1,7 @@
 use std::{env, path::PathBuf};
 
 use candid::{encode_args, CandidType, Decode, Nat, Principal};
+use canister_controlled_neuron::api::icp_governance_api::ProposalInfo;
 use canister_controlled_neuron::types::config::Config;
 use ic_management_canister_types::CanisterSettings;
 use pocket_ic::{PocketIc, PocketIcBuilder};
@@ -178,6 +179,24 @@ impl Context {
                 encode_args((transfer_args,)).unwrap(),
             )
             .expect("Failed to call canister");
+    }
+
+    pub fn get_proposal(
+        &self,
+        proposal_id: u64,
+        sender: Sender,
+    ) -> Result<Option<ProposalInfo>, String> {
+        let res = self.pic.query_call(
+            MAINNET_GOVERNANCE_CANISTER_ID,
+            sender.principal(),
+            "get_proposal_info",
+            encode_args((proposal_id,)).unwrap(),
+        );
+
+        match res {
+            Ok(res) => Decode!(res.as_slice(), Option<ProposalInfo>).map_err(|e| e.to_string()),
+            Err(e) => Err(e.to_string()),
+        }
     }
 
     pub fn mint_icp_subaccount(

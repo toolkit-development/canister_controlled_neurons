@@ -9,12 +9,16 @@ use crate::{
     api::{
         api_clients::ApiClients,
         icp_governance_api::{
-            ListNeurons, ListNeuronsResponse, ManageNeuronCommandRequest, ManageNeuronResponse,
-            Neuron as GovNeuron,
+            ListNeurons, ListNeuronsResponse, MakeProposalRequest, MakeProposalResponse,
+            ManageNeuronCommandRequest, ManageNeuronResponse, Neuron as GovNeuron,
         },
     },
+    helpers::subaccount_helper::generate_subaccount_by_nonce,
     storage::{log_storage::LogStore, neuron_reference_storage::NeuronReferenceStore},
-    types::neuron_reference::{NeuronReference, NeuronReferenceResponse},
+    types::{
+        modules::Vote,
+        neuron_reference::{NeuronReference, NeuronReferenceResponse},
+    },
 };
 
 pub struct NeuronLogic;
@@ -144,6 +148,50 @@ impl NeuronLogic {
         neuron.auto_stake_maturity(auto_stake).await?;
         let _ = LogStore::insert(format!("Auto stake maturity set to {}", auto_stake));
         Ok(true)
+    }
+
+    pub async fn spawn_neuron(
+        parent_subaccount: [u8; 32],
+        start_dissolving: bool,
+    ) -> CanisterResult<bool> {
+        let (_, parent_neuron) = NeuronReferenceStore::get_by_subaccount(parent_subaccount)?;
+        let new_nonce = NeuronReferenceStore::get_latest_key() + 1;
+        let new_neuron_id = parent_neuron.spawn(new_nonce).await?;
+
+        let spawned_neuron = NeuronReference {
+            blockheight: 0,
+            subaccount: generate_subaccount_by_nonce(new_nonce),
+            nonce: new_nonce,
+            neuron_id: new_neuron_id,
+            parent_subaccount: Some(parent_subaccount),
+        };
+
+        let _ = NeuronReferenceStore::insert(spawned_neuron.clone())?;
+        let _ = LogStore::insert(format!(
+            "Spawned neuron with neuron_id: {:?}",
+            new_neuron_id
+        ));
+        if start_dissolving {
+            let _ = spawned_neuron.set_dissolve_state(true).await?;
+            let _ = LogStore::insert(format!(
+                "Started dissolving neuron with neuron_id: {:?}",
+                new_neuron_id
+            ));
+        }
+        Ok(true)
+    }
+
+    pub async fn create_proposal(
+        subaccount: [u8; 32],
+        proposal: MakeProposalRequest,
+    ) -> CanisterResult<MakeProposalResponse> {
+        let (_, neuron) = NeuronReferenceStore::get_by_subaccount(subaccount)?;
+        neuron.create_proposal(proposal).await
+    }
+
+    pub async fn vote(subaccount: [u8; 32], proposal_id: u64, vote: Vote) -> CanisterResult<bool> {
+        let (_, neuron) = NeuronReferenceStore::get_by_subaccount(subaccount)?;
+        neuron.vote(proposal_id, vote).await
     }
 
     pub async fn get_full_neuron(subaccount: [u8; 32]) -> CanisterResult<GovNeuron> {

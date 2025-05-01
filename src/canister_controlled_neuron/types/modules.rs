@@ -1,7 +1,9 @@
 use candid::CandidType;
 use serde::{Deserialize, Serialize};
 
-use crate::api::icp_governance_api::{ManageNeuronCommandRequest, ManageNeuronResponse};
+use crate::api::icp_governance_api::{
+    MakeProposalRequest, MakeProposalResponse, ManageNeuronCommandRequest, ManageNeuronResponse,
+};
 
 use super::neuron_reference::NeuronReferenceResponse;
 
@@ -27,6 +29,34 @@ pub enum IcpNeuronArgs {
     AddDissolveDelay(AddDissolveDelayArgs),
     SetDissolveState(SetDissolveStateArgs),
     AutoStake(AutoStakeArgs),
+    Spawn(SpawnArgs),
+    CreateProposal(CreateProposalArgs),
+    Vote(VoteArgs),
+}
+
+#[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
+pub struct VoteArgs {
+    pub subaccount: [u8; 32],
+    pub proposal_id: u64,
+    pub vote: Vote,
+}
+
+#[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
+pub enum Vote {
+    Approve,
+    Reject,
+}
+
+#[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
+pub struct CreateProposalArgs {
+    pub subaccount: [u8; 32],
+    pub proposal: MakeProposalRequest,
+}
+
+#[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
+pub struct SpawnArgs {
+    pub parent_subaccount: [u8; 32],
+    pub start_dissolving: bool,
 }
 
 #[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
@@ -72,4 +102,5 @@ pub enum ModuleResponse {
     Neuron(Box<NeuronReferenceResponse>),
     BlockHeight(u64),
     ManageNeuronResponse(Box<ManageNeuronResponse>),
+    MakeProposalResponse(Box<MakeProposalResponse>),
 }

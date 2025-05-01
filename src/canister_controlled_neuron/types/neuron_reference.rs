@@ -11,13 +11,17 @@ use crate::{
         api_clients::ApiClients,
         icp_governance_api::{
             By, ChangeAutoStakeMaturity, ClaimOrRefresh, ClaimOrRefreshResponse, Command1,
-            Configure, IncreaseDissolveDelay, ManageNeuronCommandRequest, ManageNeuronRequest,
-            ManageNeuronResponse, Neuron as GovNeuron, NeuronId, Operation, Result2,
+            Configure, IncreaseDissolveDelay, MakeProposalRequest, MakeProposalResponse,
+            ManageNeuronCommandRequest, ManageNeuronRequest, ManageNeuronResponse,
+            Neuron as GovNeuron, NeuronId, Operation, ProposalId, RegisterVote, Result2, Spawn,
+            SpawnResponse,
         },
     },
     helpers::subaccount_helper::generate_subaccount_by_nonce,
     storage::neuron_reference_storage::NeuronReferenceStore,
 };
+
+use super::modules::Vote;
 
 impl_storable_for!(NeuronReference);
 
@@ -27,6 +31,7 @@ pub struct NeuronReference {
     pub subaccount: [u8; 32],
     pub nonce: u64,
     pub neuron_id: Option<u64>,
+    pub parent_subaccount: Option<[u8; 32]>,
 }
 
 impl NeuronReference {
@@ -64,6 +69,7 @@ impl NeuronReference {
             subaccount,
             nonce,
             neuron_id: None,
+            parent_subaccount: None,
         };
 
         Ok(neuron)
@@ -158,6 +164,63 @@ impl NeuronReference {
         .await
     }
 
+    pub async fn spawn(&self, nonce: u64) -> CanisterResult<Option<u64>> {
+        let result = self
+            .command(ManageNeuronCommandRequest::Spawn(Spawn {
+                percentage_to_spawn: Some(100),
+                new_controller: None,
+                nonce: Some(nonce),
+            }))
+            .await?;
+        match result.command {
+            Some(Command1::Spawn(SpawnResponse {
+                created_neuron_id: Some(NeuronId { id }),
+            })) => Ok(Some(id)),
+            Some(Command1::Error(e)) => {
+                Err(ApiError::external_service_error(e.error_message.as_str()))
+            }
+            Some(Command1::Spawn(SpawnResponse {
+                created_neuron_id: None,
+            })) => Ok(None),
+            _ => Err(ApiError::external_service_error("Unknown command")),
+        }
+    }
+
+    pub async fn create_proposal(
+        &self,
+        proposal: MakeProposalRequest,
+    ) -> CanisterResult<MakeProposalResponse> {
+        let result = self
+            .command(ManageNeuronCommandRequest::MakeProposal(proposal))
+            .await?;
+        match result.command {
+            Some(Command1::MakeProposal(response)) => Ok(response),
+            Some(Command1::Error(e)) => {
+                Err(ApiError::external_service_error(e.error_message.as_str()))
+            }
+            _ => Err(ApiError::external_service_error("Unexpected response")),
+        }
+    }
+
+    pub async fn vote(&self, proposal_id: u64, vote: Vote) -> CanisterResult<bool> {
+        let result = self
+            .command(ManageNeuronCommandRequest::RegisterVote(RegisterVote {
+                proposal: Some(ProposalId { id: proposal_id }),
+                vote: match vote {
+                    Vote::Approve => 1,
+                    Vote::Reject => 2,
+                },
+            }))
+            .await?;
+        match result.command {
+            Some(Command1::RegisterVote {}) => Ok(true),
+            Some(Command1::Error(e)) => {
+                Err(ApiError::external_service_error(e.error_message.as_str()))
+            }
+            _ => Err(ApiError::external_service_error("Unexpected response")),
+        }
+    }
+
     pub async fn command(
         &self,
         command: ManageNeuronCommandRequest,
@@ -213,6 +276,7 @@ impl NeuronReference {
             subaccount: self.subaccount,
             nonce: self.nonce,
             neuron_id: self.neuron_id,
+            parent_subaccount: self.parent_subaccount,
         }
     }
 }
@@ -224,4 +288,5 @@ pub struct NeuronReferenceResponse {
     pub subaccount: [u8; 32],
     pub nonce: u64,
     pub neuron_id: Option<u64>,
+    pub parent_subaccount: Option<[u8; 32]>,
 }

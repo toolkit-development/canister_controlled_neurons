@@ -72,6 +72,26 @@ impl ConfigLogic {
                                     .await?;
                             Ok(ModuleResponse::Boolean(result))
                         }
+                        IcpNeuronArgs::Spawn(args) => {
+                            let result = NeuronLogic::spawn_neuron(
+                                args.parent_subaccount,
+                                args.start_dissolving,
+                            )
+                            .await?;
+                            Ok(ModuleResponse::Boolean(result))
+                        }
+                        IcpNeuronArgs::CreateProposal(args) => {
+                            let result =
+                                NeuronLogic::create_proposal(args.subaccount, args.proposal)
+                                    .await?;
+                            Ok(ModuleResponse::MakeProposalResponse(Box::new(result)))
+                        }
+                        IcpNeuronArgs::Vote(args) => {
+                            let result =
+                                NeuronLogic::vote(args.subaccount, args.proposal_id, args.vote)
+                                    .await?;
+                            Ok(ModuleResponse::Boolean(result))
+                        }
                     },
                 },
             },
@@ -124,6 +144,29 @@ impl ConfigLogic {
                             NeuronReferenceStore::get_by_subaccount(args.subaccount)?;
                             NeuronLogic::get_full_neuron(args.subaccount).await?;
                             Ok(serde_json::to_string(&args).unwrap())
+                        }
+                        IcpNeuronArgs::Spawn(args) => {
+                            NeuronReferenceStore::get_by_subaccount(args.parent_subaccount)?;
+                            let neuron =
+                                NeuronLogic::get_full_neuron(args.parent_subaccount).await?;
+                            if neuron.maturity_e8s_equivalent < 100000000 {
+                                return Err(ApiError::bad_request(
+                                    "neuron must have at least 1 ICP in maturity to spawn",
+                                ));
+                            }
+                            Ok(serde_json::to_string(&args).unwrap())
+                        }
+                        IcpNeuronArgs::CreateProposal(create_proposal_args) => {
+                            NeuronReferenceStore::get_by_subaccount(
+                                create_proposal_args.subaccount,
+                            )?;
+                            NeuronLogic::get_full_neuron(create_proposal_args.subaccount).await?;
+                            Ok(serde_json::to_string(&create_proposal_args).unwrap())
+                        }
+                        IcpNeuronArgs::Vote(vote_args) => {
+                            NeuronReferenceStore::get_by_subaccount(vote_args.subaccount)?;
+                            NeuronLogic::get_full_neuron(vote_args.subaccount).await?;
+                            Ok(serde_json::to_string(&vote_args).unwrap())
                         }
                     },
                 },
