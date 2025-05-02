@@ -1,24 +1,27 @@
 use candid::CandidType;
 use ic_ledger_types::{
-    transfer, AccountIdentifier, Memo, Subaccount, Tokens, TransferArgs,
+    transfer, AccountIdentifier, Memo, Subaccount, Tokens, TransferArgs, DEFAULT_SUBACCOUNT,
     MAINNET_GOVERNANCE_CANISTER_ID, MAINNET_LEDGER_CANISTER_ID,
 };
 use serde::{Deserialize, Serialize};
-use toolkit_utils::{api_error::ApiError, impl_storable_for, result::CanisterResult};
+use toolkit_utils::{
+    api_error::ApiError, cell::CellStorage, impl_storable_for, result::CanisterResult,
+};
 
 use crate::{
     api::{
         api_clients::ApiClients,
         icp_governance_api::{
-            By, ChangeAutoStakeMaturity, ClaimOrRefresh, ClaimOrRefreshResponse, Command1,
-            Configure, IncreaseDissolveDelay, MakeProposalRequest, MakeProposalResponse,
+            AccountIdentifier as ApiAccountIdentifier, By, ChangeAutoStakeMaturity, ClaimOrRefresh,
+            ClaimOrRefreshResponse, Command1, Configure, Disburse, DisburseResponse,
+            IncreaseDissolveDelay, MakeProposalRequest, MakeProposalResponse,
             ManageNeuronCommandRequest, ManageNeuronRequest, ManageNeuronResponse,
-            Neuron as GovNeuron, NeuronId, Operation, ProposalId, RegisterVote, Result2, Spawn,
-            SpawnResponse,
+            Neuron as GovNeuron, NeuronId, Operation, ProposalId, RegisterVote, Result2,
+            SetVisibility, Spawn, SpawnResponse,
         },
     },
     helpers::subaccount_helper::generate_subaccount_by_nonce,
-    storage::neuron_reference_storage::NeuronReferenceStore,
+    storage::{config_storage::config_store, neuron_reference_storage::NeuronReferenceStore},
 };
 
 use super::modules::Vote;
@@ -75,7 +78,7 @@ impl NeuronReference {
         Ok(neuron)
     }
 
-    pub async fn claim_or_refresh(&mut self) -> CanisterResult<NeuronReference> {
+    pub async fn claim_or_refresh(&mut self) -> CanisterResult<ClaimOrRefreshResponse> {
         let (result,) = ApiClients::icp_governance()
             .manage_neuron(ManageNeuronRequest {
                 id: None,
@@ -87,19 +90,11 @@ impl NeuronReference {
             .await
             .map_err(|(_, e)| ApiError::external_service_error(e.as_str()))?;
 
-        if let Some(command) = result.command {
-            match command {
-                Command1::ClaimOrRefresh(ClaimOrRefreshResponse {
-                    refreshed_neuron_id,
-                }) => self.neuron_id = Some(refreshed_neuron_id.unwrap().id),
-                Command1::Error(e) => {
-                    return Err(ApiError::external_service_error(e.error_message.as_str()))
-                }
-                _ => return Err(ApiError::external_service_error("Unknown command")),
-            }
+        match result.command {
+            Some(Command1::ClaimOrRefresh(response)) => Ok(response),
+            Some(Command1::Error(e)) => Err(ApiError::external_service_error(&e.error_message)),
+            _ => Err(ApiError::external_service_error("Unknown command")),
         }
-
-        Ok(self.clone())
     }
 
     pub async fn top_up(&self, amount_e8s: u64) -> CanisterResult<u64> {
@@ -123,27 +118,26 @@ impl NeuronReference {
             .map_err(|e| ApiError::external_service_error(e.to_string().as_str()))
     }
 
-    pub async fn configure(&self, operation: Operation) -> CanisterResult<ManageNeuronResponse> {
-        self.command(ManageNeuronCommandRequest::Configure(Configure {
-            operation: Some(operation),
-        }))
-        .await
+    pub async fn configure(&self, operation: Operation) -> CanisterResult<()> {
+        let result = self
+            .command(ManageNeuronCommandRequest::Configure(Configure {
+                operation: Some(operation),
+            }))
+            .await?;
+        match result.command {
+            Some(Command1::Configure {}) => Ok(()),
+            _ => Err(ApiError::external_service_error("Unexpected response")),
+        }
     }
 
-    pub async fn increase_dissolve_delay(
-        &self,
-        dissolve_delay: u64,
-    ) -> CanisterResult<ManageNeuronResponse> {
+    pub async fn increase_dissolve_delay(&self, dissolve_delay: u64) -> CanisterResult<()> {
         self.configure(Operation::IncreaseDissolveDelay(IncreaseDissolveDelay {
             additional_dissolve_delay_seconds: dissolve_delay as u32,
         }))
         .await
     }
 
-    pub async fn auto_stake_maturity(
-        &self,
-        auto_stake: bool,
-    ) -> CanisterResult<ManageNeuronResponse> {
+    pub async fn auto_stake_maturity(&self, auto_stake: bool) -> CanisterResult<()> {
         self.configure(Operation::ChangeAutoStakeMaturity(
             ChangeAutoStakeMaturity {
                 requested_setting_for_auto_stake_maturity: auto_stake,
@@ -152,10 +146,7 @@ impl NeuronReference {
         .await
     }
 
-    pub async fn set_dissolve_state(
-        &self,
-        start_dissolving: bool,
-    ) -> CanisterResult<ManageNeuronResponse> {
+    pub async fn set_dissolve_state(&self, start_dissolving: bool) -> CanisterResult<()> {
         if start_dissolving {
             self.configure(Operation::StartDissolving {})
         } else {
@@ -164,24 +155,24 @@ impl NeuronReference {
         .await
     }
 
-    pub async fn spawn(&self, nonce: u64) -> CanisterResult<Option<u64>> {
+    pub async fn set_publicity(&self, publicity: SetVisibility) -> CanisterResult<()> {
+        self.configure(Operation::SetVisibility(publicity)).await
+    }
+
+    pub async fn spawn(&self, nonce: u64) -> CanisterResult<SpawnResponse> {
+        // let config = config_store().get()?;
         let result = self
             .command(ManageNeuronCommandRequest::Spawn(Spawn {
                 percentage_to_spawn: Some(100),
-                new_controller: None,
+                new_controller: None, //Some(config.governance_canister_id),
                 nonce: Some(nonce),
             }))
             .await?;
         match result.command {
-            Some(Command1::Spawn(SpawnResponse {
-                created_neuron_id: Some(NeuronId { id }),
-            })) => Ok(Some(id)),
             Some(Command1::Error(e)) => {
                 Err(ApiError::external_service_error(e.error_message.as_str()))
             }
-            Some(Command1::Spawn(SpawnResponse {
-                created_neuron_id: None,
-            })) => Ok(None),
+            Some(Command1::Spawn(response)) => Ok(response),
             _ => Err(ApiError::external_service_error("Unknown command")),
         }
     }
@@ -250,6 +241,25 @@ impl NeuronReference {
                 }
             }
             None => Err(ApiError::bad_request("Neuron not claimed yet")),
+        }
+    }
+
+    pub async fn disburse(&self) -> CanisterResult<DisburseResponse> {
+        let config = config_store().get()?;
+        let account_identifier =
+            AccountIdentifier::new(&config.governance_canister_id, &DEFAULT_SUBACCOUNT);
+        let x = self
+            .command(ManageNeuronCommandRequest::Disburse(Disburse {
+                to_account: Some(ApiAccountIdentifier {
+                    hash: account_identifier.as_bytes().to_vec(),
+                }),
+                amount: None,
+            }))
+            .await?;
+
+        match x.command {
+            Some(Command1::Disburse(response)) => Ok(response),
+            _ => Err(ApiError::external_service_error("Unexpected response")),
         }
     }
 

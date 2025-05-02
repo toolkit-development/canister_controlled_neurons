@@ -7,15 +7,15 @@ use crate::api::icp_governance_api::{
 
 use super::neuron_reference::NeuronReferenceResponse;
 
-#[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
-pub enum Module {
-    TreasuryManagement(TreasuryManagementModuleType),
-}
+// #[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
+// pub enum Module {
+//     TreasuryManagement(TreasuryManagementModuleType),
+// }
 
-#[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
-pub enum TreasuryManagementModuleType {
-    Neuron(NeuronType),
-}
+// #[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
+// pub enum TreasuryManagementModuleType {
+//     Neuron(NeuronType),
+// }
 
 #[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
 pub enum NeuronType {
@@ -32,6 +32,12 @@ pub enum IcpNeuronArgs {
     Spawn(SpawnArgs),
     CreateProposal(CreateProposalArgs),
     Vote(VoteArgs),
+    Disburse(DisburseArgs),
+}
+
+#[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
+pub struct DisburseArgs {
+    pub subaccount: [u8; 32],
 }
 
 #[derive(Debug, CandidType, Serialize, Deserialize, Clone)]

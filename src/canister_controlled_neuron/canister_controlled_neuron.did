@@ -114,6 +114,7 @@ type Disburse = record {
   to_account : opt AccountIdentifier;
   amount : opt Amount;
 };
+type DisburseArgs = record { subaccount : blob };
 type DisburseMaturity = record {
   to_account : opt Account;
   percentage_to_disburse : nat32;
@@ -158,6 +159,7 @@ type IcpNeuronArgs = variant {
   TopUp : TopUpNeuronArgs;
   CreateProposal : CreateProposalArgs;
   Create : CreateNeuronArgs;
+  Disburse : DisburseArgs;
 };
 type Icrc28TrustedOriginsResponse = record { trusted_origins : vec text };
 type Image = record { base64_encoding : opt text };
@@ -231,7 +233,6 @@ type MergeResponse = record {
   target_neuron_info : opt NeuronInfo;
   source_neuron_info : opt NeuronInfo;
 };
-type Module = variant { TreasuryManagement : TreasuryManagementModuleType };
 type ModuleResponse = variant {
   Boolean : bool;
   MakeProposalResponse : MakeProposalResponse;
@@ -373,10 +374,10 @@ type ProposalActionRequest = variant {
 };
 type RegisterVote = record { vote : int32; proposal : opt NeuronId };
 type RemoveHotKey = record { hot_key_to_remove : opt principal };
-type Result = variant { Ok : nat64; Err : ApiError };
-type Result_1 = variant { Ok : Config; Err : ApiError };
-type Result_2 = variant { Ok : Neuron; Err : ApiError };
-type Result_3 = variant { Ok : vec NeuronReferenceResponse; Err : ApiError };
+type Result = variant { Ok : Config; Err : ApiError };
+type Result_1 = variant { Ok : Neuron; Err : ApiError };
+type Result_2 = variant { Ok : vec NeuronReferenceResponse; Err : ApiError };
+type Result_3 = variant { Ok; Err : ApiError };
 type Result_4 = variant { Ok : ModuleResponse; Err : ApiError };
 type Result_5 = variant { Ok : text; Err : text };
 type RewardMode = variant {
@@ -437,7 +438,6 @@ type SwapParameters = record {
 };
 type Tokens = record { e8s : opt nat64 };
 type TopUpNeuronArgs = record { subaccount : blob; amount_e8s : nat64 };
-type TreasuryManagementModuleType = variant { Neuron : NeuronType };
 type UpdateCanisterSettings = record {
   canister_id : opt principal;
   settings : opt CanisterSettings;
@@ -457,16 +457,16 @@ type VotingRewardParameters = record {
 };
 service : (Config) -> {
   __get_candid_interface_tmp_hack : () -> (text) query;
-  get_canister_icp_balance : () -> (Result);
-  get_config : () -> (Result_1) query;
-  get_full_neuron : (blob) -> (Result_2);
+  get_config : () -> (Result) query;
+  get_full_neuron : (blob) -> (Result_1);
   get_logs : () -> (vec text) query;
-  get_neuron_references : () -> (Result_3) query;
+  get_neuron_references : () -> (Result_2) query;
   icrc10_supported_standards : () -> (vec SupportedStandard) query;
   icrc28_trusted_origins : () -> (Icrc28TrustedOriginsResponse) query;
   icts_description : () -> (text) query;
   icts_name : () -> (text) query;
   icts_version : () -> (text) query;
-  set_module : (Module) -> (Result_4);
-  validate_set_module : (Module) -> (Result_5);
+  set_visibility : (text, blob, int32) -> (Result_3);
+  tk_service_manage_neuron : (NeuronType) -> (Result_4);
+  tk_service_validate_manage_neuron : (NeuronType) -> (Result_5);
 }
