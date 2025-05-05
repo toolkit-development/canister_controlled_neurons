@@ -5,7 +5,7 @@ use crate::api::icp_governance_api::{
     MakeProposalRequest, MakeProposalResponse, ManageNeuronCommandRequest, ManageNeuronResponse,
 };
 
-use super::neuron_reference::NeuronReferenceResponse;
+use super::{neuron_reference::NeuronReferenceResponse, topic::Topic};
 
 // #[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
 // pub enum Module {
@@ -33,6 +33,19 @@ pub enum IcpNeuronArgs {
     CreateProposal(CreateProposalArgs),
     Vote(VoteArgs),
     Disburse(DisburseArgs),
+    SetFollowing(SetFollowingArgs),
+}
+
+#[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
+pub struct SetFollowingArgs {
+    pub subaccount: [u8; 32],
+    pub following: Vec<FollowingArgs>,
+}
+
+#[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
+pub struct FollowingArgs {
+    pub topic: Topic,
+    pub followees: Vec<u64>,
 }
 
 #[derive(Debug, CandidType, Serialize, Deserialize, Clone)]

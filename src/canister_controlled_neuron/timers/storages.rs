@@ -4,18 +4,18 @@ use std::{cell::RefCell, collections::HashMap};
 use crate::traits::timer_traits::{Timer, TimerActions};
 
 thread_local! {
-    pub static TIMERS: RefCell<HashMap<[u8; 32], TimerId>> = RefCell::new(HashMap::default());
+    pub static NEURON_TIMERS: RefCell<HashMap<[u8; 32], TimerId>> = RefCell::new(HashMap::default());
     pub static COUNTER: RefCell<u64> = const { RefCell::new(0) };
 }
 
-pub struct Timers;
+pub struct NeuronTimers;
 
-impl Timer<[u8; 32]> for Timers {
-    const NAME: &'static str = "timers";
+impl Timer<[u8; 32]> for NeuronTimers {
+    const NAME: &'static str = "neuron_timers";
 
     fn with_timer<R>(f: impl FnOnce(&RefCell<HashMap<[u8; 32], TimerId>>) -> R) -> R {
-        TIMERS.with(f)
+        NEURON_TIMERS.with(f)
     }
 }
 
-impl TimerActions<[u8; 32]> for Timers {}
+impl TimerActions<[u8; 32]> for NeuronTimers {}

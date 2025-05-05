@@ -136,6 +136,7 @@ type Duration = record { seconds : opt nat64 };
 type ExecuteNnsFunction = record { nns_function : int32; payload : blob };
 type Follow = record { topic : int32; followees : vec NeuronId };
 type Followees = record { followees : vec NeuronId };
+type FollowingArgs = record { topic : Topic; followees : vec nat64 };
 type GlobalTimeOfDay = record { seconds_after_utc_midnight : opt nat64 };
 type GovernanceError = record { error_message : text; error_type : int32 };
 type GovernanceParameters = record {
@@ -159,6 +160,7 @@ type IcpNeuronArgs = variant {
   TopUp : TopUpNeuronArgs;
   CreateProposal : CreateProposalArgs;
   Create : CreateNeuronArgs;
+  SetFollowing : SetFollowingArgs;
   Disburse : DisburseArgs;
 };
 type Icrc28TrustedOriginsResponse = record { trusted_origins : vec text };
@@ -313,6 +315,7 @@ type NeuronInfo = record {
 type NeuronReferenceResponse = record {
   subaccount : blob;
   blockheight : nat64;
+  topup_account : Account;
   nonce : nat64;
   storage_reference_id : nat64;
   parent_subaccount : opt blob;
@@ -377,9 +380,8 @@ type RemoveHotKey = record { hot_key_to_remove : opt principal };
 type Result = variant { Ok : Config; Err : ApiError };
 type Result_1 = variant { Ok : Neuron; Err : ApiError };
 type Result_2 = variant { Ok : vec NeuronReferenceResponse; Err : ApiError };
-type Result_3 = variant { Ok; Err : ApiError };
-type Result_4 = variant { Ok : ModuleResponse; Err : ApiError };
-type Result_5 = variant { Ok : text; Err : text };
+type Result_3 = variant { Ok : ModuleResponse; Err : ApiError };
+type Result_4 = variant { Ok : text; Err : text };
 type RewardMode = variant {
   RewardToNeuron : RewardToNeuron;
   RewardToAccount : RewardToAccount;
@@ -400,6 +402,10 @@ type SetDissolveStateArgs = record {
   subaccount : blob;
 };
 type SetDissolveTimestamp = record { dissolve_timestamp_seconds : nat64 };
+type SetFollowingArgs = record {
+  subaccount : blob;
+  following : vec FollowingArgs;
+};
 type SetVisibility = record { visibility : opt int32 };
 type Spawn = record {
   percentage_to_spawn : opt nat32;
@@ -438,6 +444,26 @@ type SwapParameters = record {
 };
 type Tokens = record { e8s : opt nat64 };
 type TopUpNeuronArgs = record { subaccount : blob; amount_e8s : nat64 };
+type Topic = variant {
+  Kyc;
+  ServiceNervousSystemManagement;
+  NetworkCanisterManagement;
+  ApiBoundaryNodeManagement;
+  SubnetRental;
+  NeuronManagement;
+  NodeProviderRewards;
+  SubnetManagement;
+  ExchangeRate;
+  NodeAdmin;
+  IcOsVersionElection;
+  ProtocolCanisterManagement;
+  NetworkEconomics;
+  IcOsVersionDeployment;
+  ParticipantManagement;
+  Governance;
+  SnsAndCommunityFund;
+  Unspecified;
+};
 type UpdateCanisterSettings = record {
   canister_id : opt principal;
   settings : opt CanisterSettings;
@@ -466,7 +492,6 @@ service : (Config) -> {
   icts_description : () -> (text) query;
   icts_name : () -> (text) query;
   icts_version : () -> (text) query;
-  set_visibility : (text, blob, int32) -> (Result_3);
-  tk_service_manage_neuron : (NeuronType) -> (Result_4);
-  tk_service_validate_manage_neuron : (NeuronType) -> (Result_5);
+  tk_service_manage_neuron : (NeuronType) -> (Result_3);
+  tk_service_validate_manage_neuron : (NeuronType) -> (Result_4);
 }

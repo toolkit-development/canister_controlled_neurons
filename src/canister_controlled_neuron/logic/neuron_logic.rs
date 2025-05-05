@@ -20,6 +20,7 @@ use crate::{
     types::{
         modules::{IcpNeuronArgs, ModuleResponse, NeuronType, Vote},
         neuron_reference::{NeuronReference, NeuronReferenceResponse},
+        topic::Topic,
     },
 };
 
@@ -180,9 +181,10 @@ impl NeuronLogic {
             .created_neuron_id
             .map(|id| id.id);
 
+        let subaccount = generate_subaccount_by_nonce(new_nonce);
         let spawned_neuron = NeuronReference {
             blockheight: 0,
-            subaccount: generate_subaccount_by_nonce(new_nonce),
+            subaccount,
             nonce: new_nonce,
             neuron_id: new_neuron_id,
             parent_subaccount: Some(parent_subaccount),
@@ -209,6 +211,7 @@ impl NeuronLogic {
             time(),
             new_neuron_id
         ));
+
         if start_dissolving {
             spawned_neuron.set_dissolve_state(true).await?;
             let _ = LogStore::insert(format!(
@@ -217,6 +220,7 @@ impl NeuronLogic {
                 new_neuron_id
             ));
         }
+
         Ok(true)
     }
 
@@ -259,6 +263,15 @@ impl NeuronLogic {
                 e
             })?;
         Ok(())
+    }
+
+    pub async fn set_following(
+        subaccount: [u8; 32],
+        topic: Topic,
+        following_neurons: Vec<u64>,
+    ) -> CanisterResult<()> {
+        let (_, neuron) = NeuronReferenceStore::get_by_subaccount(subaccount)?;
+        neuron.set_following(topic, following_neurons).await
     }
 
     pub async fn get_full_neuron(subaccount: [u8; 32]) -> CanisterResult<GovNeuron> {
@@ -340,6 +353,17 @@ impl NeuronLogic {
                     let _ = NeuronLogic::disburse(args.subaccount).await?;
                     Ok(ModuleResponse::Boolean(true))
                 }
+                IcpNeuronArgs::SetFollowing(set_following_args) => {
+                    for arg in set_following_args.following {
+                        NeuronLogic::set_following(
+                            set_following_args.subaccount,
+                            arg.topic,
+                            arg.followees,
+                        )
+                        .await?;
+                    }
+                    Ok(ModuleResponse::Boolean(true))
+                }
             },
         }
     }
@@ -414,6 +438,11 @@ impl NeuronLogic {
                     NeuronReferenceStore::get_by_subaccount(disburse_args.subaccount)?;
                     NeuronLogic::get_full_neuron(disburse_args.subaccount).await?;
                     Ok(serde_json::to_string(&disburse_args).unwrap())
+                }
+                IcpNeuronArgs::SetFollowing(set_following_args) => {
+                    NeuronReferenceStore::get_by_subaccount(set_following_args.subaccount)?;
+                    NeuronLogic::get_full_neuron(set_following_args.subaccount).await?;
+                    Ok(serde_json::to_string(&set_following_args).unwrap())
                 }
             },
         }

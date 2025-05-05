@@ -311,7 +311,7 @@ fn test_create_proposal() -> Result<(), String> {
 }
 
 #[test]
-fn test_spawn_neuron() -> Result<(), String> {
+fn test_spawn_neuron_manual_disburse() -> Result<(), String> {
     let context = Context::new();
 
     let config_result =
@@ -415,11 +415,12 @@ fn test_spawn_neuron() -> Result<(), String> {
         parent_subaccount: *subaccount,
         start_dissolving: true,
     }));
-    let _ = context.update::<CanisterResult<ModuleResponse>>(
+    let x = context.update::<CanisterResult<ModuleResponse>>(
         Sender::Other(context.config.governance_canister_id),
         "tk_service_manage_neuron",
         Some(encode_args((args,)).unwrap()),
     )?;
+    println!("x: {:?}", x);
 
     let neuron_references = context.query::<CanisterResult<Vec<NeuronReferenceResponse>>>(
         Sender::Other(context.config.governance_canister_id),
@@ -452,7 +453,8 @@ fn test_spawn_neuron() -> Result<(), String> {
 
     println!("no maturity neuron: {:?}", neuron_info);
     assert!(neuron_info.is_ok());
-    assert!(neuron_info.unwrap().maturity_e8s_equivalent == 0);
+    let neuron_info_unwrapped = neuron_info.unwrap();
+    assert!(neuron_info_unwrapped.maturity_e8s_equivalent == 0);
 
     let disburse_args: NeuronType = NeuronType::Icp(IcpNeuronArgs::Disburse(DisburseArgs {
         subaccount: neuron_references_unwrapped[1].subaccount,
@@ -466,8 +468,8 @@ fn test_spawn_neuron() -> Result<(), String> {
     println!("disburse_result: {:?}", disburse_result);
     assert!(disburse_result.is_ok());
 
-    // context.pic.tick();
-    // context.pic.advance_time(Duration::from_secs(605000));
+    context.pic.tick();
+    context.pic.advance_time(Duration::from_secs(605000));
 
     let config_result =
         context.query::<CanisterResult<Config>>(Sender::Owner, "get_config", None)?;
@@ -479,7 +481,14 @@ fn test_spawn_neuron() -> Result<(), String> {
         "governance_canister_balance after: {:?}",
         governance_canister_balance
     );
+    println!(
+        "neuron_info_unwrapped.cached_neuron_stake_e8s: {:?}",
+        neuron_info_unwrapped.cached_neuron_stake_e8s
+    );
     assert!(governance_canister_balance.is_ok());
-    assert!(governance_canister_balance.unwrap() == neuron_info_unwrapped.cached_neuron_stake_e8s);
+    assert!(
+        governance_canister_balance.unwrap()
+            == (neuron_info_unwrapped.cached_neuron_stake_e8s - 10_000) // fee
+    );
     Ok(())
 }

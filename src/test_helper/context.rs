@@ -3,6 +3,7 @@ use std::{env, path::PathBuf};
 use candid::{encode_args, CandidType, Decode, Nat, Principal};
 use canister_controlled_neuron::api::icp_governance_api::ProposalInfo;
 use canister_controlled_neuron::types::config::Config;
+
 use ic_management_canister_types::CanisterSettings;
 use pocket_ic::{PocketIc, PocketIcBuilder};
 use serde::de::DeserializeOwned;
@@ -45,6 +46,7 @@ impl Context {
             reserved_cycles_limit: None,
             log_visibility: None,
             wasm_memory_limit: None,
+            wasm_memory_threshold: None,
         });
 
         if !PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap())

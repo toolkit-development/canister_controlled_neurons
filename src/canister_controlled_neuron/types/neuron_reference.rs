@@ -12,19 +12,19 @@ use crate::{
     api::{
         api_clients::ApiClients,
         icp_governance_api::{
-            AccountIdentifier as ApiAccountIdentifier, By, ChangeAutoStakeMaturity, ClaimOrRefresh,
-            ClaimOrRefreshResponse, Command1, Configure, Disburse, DisburseResponse,
-            IncreaseDissolveDelay, MakeProposalRequest, MakeProposalResponse,
-            ManageNeuronCommandRequest, ManageNeuronRequest, ManageNeuronResponse,
-            Neuron as GovNeuron, NeuronId, Operation, ProposalId, RegisterVote, Result2,
-            SetVisibility, Spawn, SpawnResponse,
+            Account, AccountIdentifier as ApiAccountIdentifier, By, ChangeAutoStakeMaturity,
+            ClaimOrRefresh, ClaimOrRefreshResponse, Command1, Configure, Disburse,
+            DisburseResponse, Follow, IncreaseDissolveDelay, MakeProposalRequest,
+            MakeProposalResponse, ManageNeuronCommandRequest, ManageNeuronRequest,
+            ManageNeuronResponse, Neuron as GovNeuron, NeuronId, NeuronIdOrSubaccount, Operation,
+            ProposalId, RegisterVote, Result2, SetVisibility, Spawn, SpawnResponse,
         },
     },
     helpers::subaccount_helper::generate_subaccount_by_nonce,
     storage::{config_storage::config_store, neuron_reference_storage::NeuronReferenceStore},
 };
 
-use super::modules::Vote;
+use super::{modules::Vote, topic::Topic};
 
 impl_storable_for!(NeuronReference);
 
@@ -212,6 +212,29 @@ impl NeuronReference {
         }
     }
 
+    pub async fn set_following(
+        &self,
+        topic: Topic,
+        following_neurons: Vec<u64>,
+    ) -> CanisterResult<()> {
+        let followees = following_neurons
+            .iter()
+            .map(|id| NeuronId { id: *id })
+            .collect();
+
+        let result = self
+            .command(ManageNeuronCommandRequest::Follow(Follow {
+                topic: topic.into(),
+                followees,
+            }))
+            .await?;
+
+        match result.command {
+            Some(Command1::Follow {}) => Ok(()),
+            _ => Err(ApiError::external_service_error("Unexpected response")),
+        }
+    }
+
     pub async fn command(
         &self,
         command: ManageNeuronCommandRequest,
@@ -220,9 +243,11 @@ impl NeuronReference {
             Some(neuron_id) => {
                 let (result,) = ApiClients::icp_governance()
                     .manage_neuron(ManageNeuronRequest {
-                        id: Some(NeuronId { id: neuron_id }),
+                        id: None,
                         command: Some(command),
-                        neuron_id_or_subaccount: None,
+                        neuron_id_or_subaccount: Some(NeuronIdOrSubaccount::NeuronId(NeuronId {
+                            id: neuron_id,
+                        })),
                     })
                     .await
                     .map_err(|(_, e)| ApiError::external_service_error(e.as_str()))?;
@@ -230,6 +255,7 @@ impl NeuronReference {
                 if let Some(command_result) = result.command {
                     match command_result {
                         Command1::Error(e) => {
+                            // Not sure why this throws
                             Err(ApiError::external_service_error(e.error_message.as_str()))
                         }
                         _ => Ok(ManageNeuronResponse {
@@ -287,6 +313,10 @@ impl NeuronReference {
             nonce: self.nonce,
             neuron_id: self.neuron_id,
             parent_subaccount: self.parent_subaccount,
+            topup_account: Account {
+                owner: Some(MAINNET_GOVERNANCE_CANISTER_ID),
+                subaccount: Some(self.subaccount.to_vec()),
+            },
         }
     }
 }
@@ -299,4 +329,5 @@ pub struct NeuronReferenceResponse {
     pub nonce: u64,
     pub neuron_id: Option<u64>,
     pub parent_subaccount: Option<[u8; 32]>,
+    pub topup_account: Account,
 }
