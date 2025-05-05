@@ -1,12 +1,19 @@
 {
   "canisters": {
     "canister_controlled_neuron": {
-      "candid": "canister_controlled_neuron.did",
-      "package": "canister_controlled_neuron",
+      "candid": "src/canister_controlled_neuron/canister_controlled_neuron.did",
+      "package": "src/canister_controlled_neuron",
       "type": "custom",
       "wasm": "wasm/canister_controlled_neuron.wasm.gz",
       "build": [
         "bash scripts/build.sh"
+      ],
+      "metadata": [
+        {
+          "name": "candid:service",
+          "path": "src/canister_controlled_neuron/canister_controlled_neuron.did",
+          "visibility": "public"
+        }
       ]
     }
   },

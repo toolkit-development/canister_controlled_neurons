@@ -9,17 +9,7 @@ pub mod traits;
 pub mod types;
 
 use candid::export_service;
-use ic_cdk::{init, query};
-use logic::config_logic::ConfigLogic;
-use types::config::Config;
-
-#[init]
-pub fn init(canisters: Config) {
-    let _ = ConfigLogic::init(
-        canisters.governance_canister_id,
-        canisters.sns_ledger_canister_id,
-    );
-}
+use ic_cdk::query;
 
 #[query]
 pub fn __get_candid_interface_tmp_hack() -> String {
