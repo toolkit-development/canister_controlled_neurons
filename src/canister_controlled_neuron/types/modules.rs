@@ -5,21 +5,12 @@ use crate::api::icp_governance_api::{
     MakeProposalRequest, MakeProposalResponse, ManageNeuronCommandRequest, ManageNeuronResponse,
 };
 
-use super::{neuron_reference::NeuronReferenceResponse, topic::Topic};
-
-// #[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
-// pub enum Module {
-//     TreasuryManagement(TreasuryManagementModuleType),
-// }
-
-// #[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
-// pub enum TreasuryManagementModuleType {
-//     Neuron(NeuronType),
-// }
+use super::{icp_neuron_reference::IcpNeuronReferenceResponse, topic::Topic};
 
 #[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
 pub enum NeuronType {
     Icp(IcpNeuronArgs),
+    Sns(bool),
 }
 
 #[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
@@ -38,7 +29,7 @@ pub enum IcpNeuronArgs {
 
 #[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
 pub struct SetFollowingArgs {
-    pub subaccount: [u8; 32],
+    pub identifier: IcpNeuronIdentifier,
     pub following: Vec<FollowingArgs>,
 }
 
@@ -50,12 +41,12 @@ pub struct FollowingArgs {
 
 #[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
 pub struct DisburseArgs {
-    pub subaccount: [u8; 32],
+    pub identifier: IcpNeuronIdentifier,
 }
 
 #[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
 pub struct VoteArgs {
-    pub subaccount: [u8; 32],
+    pub identifier: IcpNeuronIdentifier,
     pub proposal_id: u64,
     pub vote: Vote,
 }
@@ -68,31 +59,31 @@ pub enum Vote {
 
 #[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
 pub struct CreateProposalArgs {
-    pub subaccount: [u8; 32],
+    pub identifier: IcpNeuronIdentifier,
     pub proposal: MakeProposalRequest,
 }
 
 #[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
 pub struct SpawnArgs {
-    pub parent_subaccount: [u8; 32],
+    pub identifier: IcpNeuronIdentifier,
     pub start_dissolving: bool,
 }
 
 #[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
 pub struct AutoStakeArgs {
-    pub subaccount: [u8; 32],
+    pub identifier: IcpNeuronIdentifier,
     pub auto_stake: bool,
 }
 
 #[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
 pub struct SetDissolveStateArgs {
-    pub subaccount: [u8; 32],
+    pub identifier: IcpNeuronIdentifier,
     pub start_dissolving: bool,
 }
 
 #[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
 pub struct AddDissolveDelayArgs {
-    pub subaccount: [u8; 32],
+    pub identifier: IcpNeuronIdentifier,
     pub dissolve_delay_seconds: u64,
 }
 
@@ -104,21 +95,27 @@ pub struct CreateNeuronArgs {
 }
 
 #[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
+pub enum IcpNeuronIdentifier {
+    Subaccount([u8; 32]),
+    NeuronId(u64),
+}
+
+#[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
 pub struct TopUpNeuronArgs {
-    pub subaccount: [u8; 32],
+    pub identifier: IcpNeuronIdentifier,
     pub amount_e8s: u64,
 }
 
 #[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
 pub struct CommandNeuronArgs {
-    pub subaccount: [u8; 32],
+    pub identifier: IcpNeuronIdentifier,
     pub command: ManageNeuronCommandRequest,
 }
 
 #[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
 pub enum ModuleResponse {
     Boolean(bool),
-    Neuron(Box<NeuronReferenceResponse>),
+    Neuron(Box<IcpNeuronReferenceResponse>),
     BlockHeight(u64),
     ManageNeuronResponse(Box<ManageNeuronResponse>),
     MakeProposalResponse(Box<MakeProposalResponse>),

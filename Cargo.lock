@@ -2264,7 +2264,6 @@ dependencies = [
 [[package]]
 name = "toolkit-utils"
 version = "0.1.0"
-source = "git+https://github.com/toolkit-development/toolkit-utils#1ed91489cd3dc25e6e6c0400361a82f356979acf"
 dependencies = [
  "base64 0.22.1",
  "candid",

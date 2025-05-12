@@ -2,7 +2,7 @@ type Account = record { owner : opt principal; subaccount : opt blob };
 type AccountIdentifier = record { hash : blob };
 type AddDissolveDelayArgs = record {
   dissolve_delay_seconds : nat64;
-  subaccount : blob;
+  identifier : IcpNeuronIdentifier;
 };
 type AddHotKey = record { new_hot_key : opt principal };
 type AddOrRemoveNodeProvider = record { change : opt Change };
@@ -34,7 +34,10 @@ type ApiErrorType = variant {
   BadRequest;
   Conflict;
 };
-type AutoStakeArgs = record { subaccount : blob; auto_stake : bool };
+type AutoStakeArgs = record {
+  auto_stake : bool;
+  identifier : IcpNeuronIdentifier;
+};
 type BallotInfo = record { vote : int32; proposal_id : opt NeuronId };
 type By = variant {
   NeuronIdOrSubaccount : record {};
@@ -91,8 +94,8 @@ type CreateNeuronArgs = record {
   auto_stake : opt bool;
 };
 type CreateProposalArgs = record {
-  subaccount : blob;
   proposal : MakeProposalRequest;
+  identifier : IcpNeuronIdentifier;
 };
 type CreateServiceNervousSystem = record {
   url : opt text;
@@ -114,7 +117,7 @@ type Disburse = record {
   to_account : opt AccountIdentifier;
   amount : opt Amount;
 };
-type DisburseArgs = record { subaccount : blob };
+type DisburseArgs = record { identifier : IcpNeuronIdentifier };
 type DisburseMaturity = record {
   to_account : opt Account;
   percentage_to_disburse : nat32;
@@ -156,12 +159,22 @@ type IcpNeuronArgs = variant {
   Spawn : SpawnArgs;
   AddDissolveDelay : AddDissolveDelayArgs;
   Vote : VoteArgs;
-  SetDissolveState : SetDissolveStateArgs;
+  SetDissolveState : SpawnArgs;
   TopUp : TopUpNeuronArgs;
   CreateProposal : CreateProposalArgs;
   Create : CreateNeuronArgs;
   SetFollowing : SetFollowingArgs;
   Disburse : DisburseArgs;
+};
+type IcpNeuronIdentifier = variant { Subaccount : blob; NeuronId : nat64 };
+type IcpNeuronReferenceResponse = record {
+  subaccount : blob;
+  blockheight : nat64;
+  topup_account : Account;
+  nonce : nat64;
+  storage_reference_id : nat64;
+  parent_subaccount : opt blob;
+  neuron_id : opt nat64;
 };
 type Icrc28TrustedOriginsResponse = record { trusted_origins : vec text };
 type Image = record { base64_encoding : opt text };
@@ -239,7 +252,7 @@ type ModuleResponse = variant {
   Boolean : bool;
   MakeProposalResponse : MakeProposalResponse;
   BlockHeight : nat64;
-  Neuron : NeuronReferenceResponse;
+  Neuron : IcpNeuronReferenceResponse;
   ManageNeuronResponse : ManageNeuronResponse;
 };
 type Motion = record { motion_text : text };
@@ -312,15 +325,6 @@ type NeuronInfo = record {
   voting_power : nat64;
   age_seconds : nat64;
 };
-type NeuronReferenceResponse = record {
-  subaccount : blob;
-  blockheight : nat64;
-  topup_account : Account;
-  nonce : nat64;
-  storage_reference_id : nat64;
-  parent_subaccount : opt blob;
-  neuron_id : opt nat64;
-};
 type NeuronStakeTransfer = record {
   to_subaccount : blob;
   neuron_stake_e8s : nat64;
@@ -330,7 +334,7 @@ type NeuronStakeTransfer = record {
   transfer_timestamp : nat64;
   block_height : nat64;
 };
-type NeuronType = variant { Icp : IcpNeuronArgs };
+type NeuronType = variant { Icp : IcpNeuronArgs; Sns : bool };
 type NeuronsFundEconomics = record {
   maximum_icp_xdr_rate : opt Percentage;
   neurons_fund_matched_funding_curve_coefficients : opt NeuronsFundMatchedFundingCurveCoefficients;
@@ -379,7 +383,7 @@ type RegisterVote = record { vote : int32; proposal : opt NeuronId };
 type RemoveHotKey = record { hot_key_to_remove : opt principal };
 type Result = variant { Ok : Config; Err : ApiError };
 type Result_1 = variant { Ok : Neuron; Err : ApiError };
-type Result_2 = variant { Ok : vec NeuronReferenceResponse; Err : ApiError };
+type Result_2 = variant { Ok : vec IcpNeuronReferenceResponse; Err : ApiError };
 type Result_3 = variant { Ok : ModuleResponse; Err : ApiError };
 type Result_4 = variant { Ok : text; Err : text };
 type RewardMode = variant {
@@ -397,14 +401,10 @@ type RewardNodeProviders = record {
 };
 type RewardToAccount = record { to_account : opt AccountIdentifier };
 type RewardToNeuron = record { dissolve_delay_seconds : nat64 };
-type SetDissolveStateArgs = record {
-  start_dissolving : bool;
-  subaccount : blob;
-};
 type SetDissolveTimestamp = record { dissolve_timestamp_seconds : nat64 };
 type SetFollowingArgs = record {
-  subaccount : blob;
   following : vec FollowingArgs;
+  identifier : IcpNeuronIdentifier;
 };
 type SetVisibility = record { visibility : opt int32 };
 type Spawn = record {
@@ -412,7 +412,10 @@ type Spawn = record {
   new_controller : opt principal;
   nonce : opt nat64;
 };
-type SpawnArgs = record { start_dissolving : bool; parent_subaccount : blob };
+type SpawnArgs = record {
+  start_dissolving : bool;
+  identifier : IcpNeuronIdentifier;
+};
 type SpawnResponse = record { created_neuron_id : opt NeuronId };
 type Split = record { amount_e8s : nat64 };
 type StakeMaturity = record { percentage_to_stake : opt nat32 };
@@ -443,7 +446,10 @@ type SwapParameters = record {
   restricted_countries : opt Countries;
 };
 type Tokens = record { e8s : opt nat64 };
-type TopUpNeuronArgs = record { subaccount : blob; amount_e8s : nat64 };
+type TopUpNeuronArgs = record {
+  amount_e8s : nat64;
+  identifier : IcpNeuronIdentifier;
+};
 type Topic = variant {
   Kyc;
   ServiceNervousSystemManagement;
@@ -470,7 +476,11 @@ type UpdateCanisterSettings = record {
 };
 type ValidationResponse = record { field : text; message : text };
 type Vote = variant { Approve; Reject };
-type VoteArgs = record { vote : Vote; subaccount : blob; proposal_id : nat64 };
+type VoteArgs = record {
+  vote : Vote;
+  proposal_id : nat64;
+  identifier : IcpNeuronIdentifier;
+};
 type VotingPowerEconomics = record {
   start_reducing_voting_power_after_seconds : opt nat64;
   neuron_minimum_dissolve_delay_to_vote_seconds : opt nat64;
@@ -484,7 +494,7 @@ type VotingRewardParameters = record {
 service : (Config) -> {
   __get_candid_interface_tmp_hack : () -> (text) query;
   get_config : () -> (Result) query;
-  get_full_neuron : (blob) -> (Result_1);
+  get_full_neuron : (IcpNeuronIdentifier) -> (Result_1);
   get_logs : () -> (vec text) query;
   get_neuron_references : () -> (Result_2) query;
   icrc10_supported_standards : () -> (vec SupportedStandard) query;

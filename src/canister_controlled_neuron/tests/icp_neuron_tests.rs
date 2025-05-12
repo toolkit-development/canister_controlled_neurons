@@ -5,11 +5,11 @@ use canister_controlled_neuron::{
     api::icp_governance_api::{MakeProposalRequest, Motion, Neuron, ProposalActionRequest},
     types::{
         config::Config,
+        icp_neuron_reference::IcpNeuronReferenceResponse,
         modules::{
-            CreateNeuronArgs, CreateProposalArgs, DisburseArgs, IcpNeuronArgs, ModuleResponse,
-            NeuronType, SpawnArgs,
+            CreateNeuronArgs, CreateProposalArgs, DisburseArgs, IcpNeuronArgs, IcpNeuronIdentifier,
+            ModuleResponse, NeuronType, SpawnArgs,
         },
-        neuron_reference::NeuronReferenceResponse,
     },
 };
 use test_helper::{context::Context, sender::Sender};
@@ -71,7 +71,7 @@ fn test_create_neuron_blanco() -> Result<(), String> {
     println!("logs: {:?}", logs);
     assert!(logs.is_empty());
 
-    let neuron_references = context.query::<CanisterResult<Vec<NeuronReferenceResponse>>>(
+    let neuron_references = context.query::<CanisterResult<Vec<IcpNeuronReferenceResponse>>>(
         Sender::Other(context.config.governance_canister_id),
         "get_neuron_references",
         None,
@@ -82,7 +82,7 @@ fn test_create_neuron_blanco() -> Result<(), String> {
     let neuron_references_unwrapped = neuron_references.unwrap();
 
     assert!(!neuron_references_unwrapped.is_empty());
-    let subaccount = &neuron_references_unwrapped[0].subaccount.clone();
+    let subaccount = IcpNeuronIdentifier::Subaccount(neuron_references_unwrapped[0].subaccount);
 
     let neuron_info = context.update::<CanisterResult<Neuron>>(
         Sender::Other(context.config.governance_canister_id),
@@ -137,7 +137,7 @@ fn test_create_neuron_with_dissolve_delay() -> Result<(), String> {
     println!("logs: {:?}", logs);
     assert!(logs.is_empty());
 
-    let neuron_references = context.query::<CanisterResult<Vec<NeuronReferenceResponse>>>(
+    let neuron_references = context.query::<CanisterResult<Vec<IcpNeuronReferenceResponse>>>(
         Sender::Other(context.config.governance_canister_id),
         "get_neuron_references",
         None,
@@ -148,7 +148,7 @@ fn test_create_neuron_with_dissolve_delay() -> Result<(), String> {
     let neuron_references_unwrapped = neuron_references.unwrap();
 
     assert!(!neuron_references_unwrapped.is_empty());
-    let subaccount = &neuron_references_unwrapped[0].subaccount.clone();
+    let subaccount = IcpNeuronIdentifier::Subaccount(neuron_references_unwrapped[0].subaccount);
 
     let neuron_info = context.update::<CanisterResult<Neuron>>(
         Sender::Other(context.config.governance_canister_id),
@@ -203,7 +203,7 @@ fn test_create_neuron_with_auto_stake() -> Result<(), String> {
     println!("logs: {:?}", logs);
     assert!(logs.is_empty());
 
-    let neuron_references = context.query::<CanisterResult<Vec<NeuronReferenceResponse>>>(
+    let neuron_references = context.query::<CanisterResult<Vec<IcpNeuronReferenceResponse>>>(
         Sender::Other(context.config.governance_canister_id),
         "get_neuron_references",
         None,
@@ -214,7 +214,7 @@ fn test_create_neuron_with_auto_stake() -> Result<(), String> {
     let neuron_references_unwrapped = neuron_references.unwrap();
 
     assert!(!neuron_references_unwrapped.is_empty());
-    let subaccount = &neuron_references_unwrapped[0].subaccount.clone();
+    let subaccount = IcpNeuronIdentifier::Subaccount(neuron_references_unwrapped[0].subaccount);
 
     let neuron_info = context.update::<CanisterResult<Neuron>>(
         Sender::Other(context.config.governance_canister_id),
@@ -257,7 +257,7 @@ fn test_create_proposal() -> Result<(), String> {
     )?;
     assert!(create_neuron.is_ok());
 
-    let neuron_references = context.query::<CanisterResult<Vec<NeuronReferenceResponse>>>(
+    let neuron_references = context.query::<CanisterResult<Vec<IcpNeuronReferenceResponse>>>(
         Sender::Other(context.config.governance_canister_id),
         "get_neuron_references",
         None,
@@ -265,10 +265,10 @@ fn test_create_proposal() -> Result<(), String> {
     assert!(neuron_references.is_ok());
     let neuron_references_unwrapped = neuron_references.unwrap();
     assert!(!neuron_references_unwrapped.is_empty());
-    let subaccount = &neuron_references_unwrapped[0].subaccount.clone();
+    let subaccount = IcpNeuronIdentifier::Subaccount(neuron_references_unwrapped[0].subaccount);
 
     let args: NeuronType = NeuronType::Icp(IcpNeuronArgs::CreateProposal(CreateProposalArgs {
-        subaccount: *subaccount,
+        identifier: subaccount.clone(),
         proposal: MakeProposalRequest {
             title: Some("Test proposal".to_string()),
             summary: "Simulate governance vote".to_string(),
@@ -360,7 +360,7 @@ fn test_spawn_neuron_manual_disburse() -> Result<(), String> {
     assert!(balance.is_ok());
     assert!(balance.unwrap() == 0u64);
 
-    let neuron_references = context.query::<CanisterResult<Vec<NeuronReferenceResponse>>>(
+    let neuron_references = context.query::<CanisterResult<Vec<IcpNeuronReferenceResponse>>>(
         Sender::Other(context.config.governance_canister_id),
         "get_neuron_references",
         None,
@@ -368,10 +368,10 @@ fn test_spawn_neuron_manual_disburse() -> Result<(), String> {
     assert!(neuron_references.is_ok());
     let neuron_references_unwrapped = neuron_references.unwrap();
     assert!(!neuron_references_unwrapped.is_empty());
-    let subaccount = &neuron_references_unwrapped[0].subaccount.clone();
+    let subaccount = IcpNeuronIdentifier::Subaccount(neuron_references_unwrapped[0].subaccount);
 
     let args: NeuronType = NeuronType::Icp(IcpNeuronArgs::CreateProposal(CreateProposalArgs {
-        subaccount: *subaccount,
+        identifier: subaccount.clone(),
         proposal: MakeProposalRequest {
             title: Some("Test proposal".to_string()),
             summary: "Simulate governance vote".to_string(),
@@ -404,7 +404,7 @@ fn test_spawn_neuron_manual_disburse() -> Result<(), String> {
     let neuron_info = context.update::<CanisterResult<Neuron>>(
         Sender::Other(context.config.governance_canister_id),
         "get_full_neuron",
-        Some(encode_args((subaccount,)).unwrap()),
+        Some(encode_args((subaccount.clone(),)).unwrap()),
     )?;
     println!("neuron_info: {:?}", neuron_info);
     assert!(neuron_info.is_ok());
@@ -412,7 +412,7 @@ fn test_spawn_neuron_manual_disburse() -> Result<(), String> {
     assert!(neuron_info_unwrapped.maturity_e8s_equivalent > 0);
 
     let args: NeuronType = NeuronType::Icp(IcpNeuronArgs::Spawn(SpawnArgs {
-        parent_subaccount: *subaccount,
+        identifier: subaccount.clone(),
         start_dissolving: true,
     }));
     let x = context.update::<CanisterResult<ModuleResponse>>(
@@ -422,7 +422,7 @@ fn test_spawn_neuron_manual_disburse() -> Result<(), String> {
     )?;
     println!("x: {:?}", x);
 
-    let neuron_references = context.query::<CanisterResult<Vec<NeuronReferenceResponse>>>(
+    let neuron_references = context.query::<CanisterResult<Vec<IcpNeuronReferenceResponse>>>(
         Sender::Other(context.config.governance_canister_id),
         "get_neuron_references",
         None,
@@ -435,7 +435,12 @@ fn test_spawn_neuron_manual_disburse() -> Result<(), String> {
     let neuron_info = context.update::<CanisterResult<Neuron>>(
         Sender::Other(context.config.governance_canister_id),
         "get_full_neuron",
-        Some(encode_args((&neuron_references_unwrapped[1].subaccount,)).unwrap()),
+        Some(
+            encode_args((IcpNeuronIdentifier::Subaccount(
+                neuron_references_unwrapped[1].subaccount,
+            ),))
+            .unwrap(),
+        ),
     )?;
 
     println!("neuron_info: {:?}", neuron_info);
@@ -448,7 +453,12 @@ fn test_spawn_neuron_manual_disburse() -> Result<(), String> {
     let neuron_info = context.update::<CanisterResult<Neuron>>(
         Sender::Other(context.config.governance_canister_id),
         "get_full_neuron",
-        Some(encode_args((&neuron_references_unwrapped[1].subaccount,)).unwrap()),
+        Some(
+            encode_args((IcpNeuronIdentifier::Subaccount(
+                neuron_references_unwrapped[1].subaccount,
+            ),))
+            .unwrap(),
+        ),
     )?;
 
     println!("no maturity neuron: {:?}", neuron_info);
@@ -457,7 +467,7 @@ fn test_spawn_neuron_manual_disburse() -> Result<(), String> {
     assert!(neuron_info_unwrapped.maturity_e8s_equivalent == 0);
 
     let disburse_args: NeuronType = NeuronType::Icp(IcpNeuronArgs::Disburse(DisburseArgs {
-        subaccount: neuron_references_unwrapped[1].subaccount,
+        identifier: IcpNeuronIdentifier::Subaccount(neuron_references_unwrapped[1].subaccount),
     }));
 
     let disburse_result = context.update::<CanisterResult<ModuleResponse>>(

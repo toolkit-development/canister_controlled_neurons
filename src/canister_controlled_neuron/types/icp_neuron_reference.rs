@@ -21,15 +21,17 @@ use crate::{
         },
     },
     helpers::subaccount_helper::generate_subaccount_by_nonce,
-    storage::{config_storage::config_store, neuron_reference_storage::NeuronReferenceStore},
+    storage::{
+        config_storage::config_store, icp_neuron_reference_storage::IcpNeuronReferenceStore,
+    },
 };
 
 use super::{modules::Vote, topic::Topic};
 
-impl_storable_for!(NeuronReference);
+impl_storable_for!(IcpNeuronReference);
 
 #[derive(Debug, Serialize, Deserialize, CandidType, Clone)]
-pub struct NeuronReference {
+pub struct IcpNeuronReference {
     pub blockheight: u64,
     pub subaccount: [u8; 32],
     pub nonce: u64,
@@ -37,8 +39,8 @@ pub struct NeuronReference {
     pub parent_subaccount: Option<[u8; 32]>,
 }
 
-impl NeuronReference {
-    pub async fn new(amount_e8s: u64) -> CanisterResult<NeuronReference> {
+impl IcpNeuronReference {
+    pub async fn new(amount_e8s: u64) -> CanisterResult<IcpNeuronReference> {
         let fee = 10_000;
 
         if amount_e8s < 100_000_000 + fee {
@@ -48,7 +50,7 @@ impl NeuronReference {
             )));
         }
 
-        let nonce = NeuronReferenceStore::get_latest_key() + 1;
+        let nonce = IcpNeuronReferenceStore::get_latest_key() + 1;
         let subaccount = generate_subaccount_by_nonce(nonce);
         let account_identifier =
             AccountIdentifier::new(&MAINNET_GOVERNANCE_CANISTER_ID, &Subaccount(subaccount));
@@ -67,7 +69,7 @@ impl NeuronReference {
             .map_err(|e| ApiError::external_service_error(e.to_string().as_str()))?
             .map_err(|e| ApiError::external_service_error(e.to_string().as_str()))?;
 
-        let neuron = NeuronReference {
+        let neuron = IcpNeuronReference {
             blockheight,
             subaccount,
             nonce,
@@ -305,8 +307,8 @@ impl NeuronReference {
         }
     }
 
-    pub fn to_response(&self, storage_reference_id: u64) -> NeuronReferenceResponse {
-        NeuronReferenceResponse {
+    pub fn to_response(&self, storage_reference_id: u64) -> IcpNeuronReferenceResponse {
+        IcpNeuronReferenceResponse {
             storage_reference_id,
             blockheight: self.blockheight,
             subaccount: self.subaccount,
@@ -322,7 +324,7 @@ impl NeuronReference {
 }
 
 #[derive(Debug, Serialize, Deserialize, CandidType, Clone)]
-pub struct NeuronReferenceResponse {
+pub struct IcpNeuronReferenceResponse {
     pub storage_reference_id: u64,
     pub blockheight: u64,
     pub subaccount: [u8; 32],
