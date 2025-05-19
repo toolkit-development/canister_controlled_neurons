@@ -26,7 +26,7 @@ use crate::{
     },
 };
 
-use super::{modules::Vote, topic::Topic};
+use super::{args::icp_neuron_args::Vote, topic::Topic};
 
 impl_storable_for!(IcpNeuronReference);
 

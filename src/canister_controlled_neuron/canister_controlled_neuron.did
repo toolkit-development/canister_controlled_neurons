@@ -334,7 +334,7 @@ type NeuronStakeTransfer = record {
   transfer_timestamp : nat64;
   block_height : nat64;
 };
-type NeuronType = variant { Icp : IcpNeuronArgs; Sns : bool };
+type NeuronType = variant { Icp : IcpNeuronArgs; Sns : SnsNeuronArgs };
 type NeuronsFundEconomics = record {
   maximum_icp_xdr_rate : opt Percentage;
   neurons_fund_matched_funding_curve_coefficients : opt NeuronsFundMatchedFundingCurveCoefficients;
@@ -407,6 +407,7 @@ type SetFollowingArgs = record {
   identifier : IcpNeuronIdentifier;
 };
 type SetVisibility = record { visibility : opt int32 };
+type SnsNeuronArgs = variant { Create : Split };
 type Spawn = record {
   percentage_to_spawn : opt nat32;
   new_controller : opt principal;

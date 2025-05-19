@@ -4,7 +4,10 @@ use toolkit_utils::result::CanisterResult;
 use crate::{
     api::icp_governance_api::Neuron as GovNeuron,
     logic::icp_neuron_logic::NeuronLogic,
-    types::{icp_neuron_reference::IcpNeuronReferenceResponse, modules::IcpNeuronIdentifier},
+    types::{
+        args::icp_neuron_args::IcpNeuronIdentifier,
+        icp_neuron_reference::IcpNeuronReferenceResponse,
+    },
 };
 
 #[query]

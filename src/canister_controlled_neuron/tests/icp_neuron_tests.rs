@@ -4,12 +4,13 @@ use candid::encode_args;
 use canister_controlled_neuron::{
     api::icp_governance_api::{MakeProposalRequest, Motion, Neuron, ProposalActionRequest},
     types::{
+        args::icp_neuron_args::{
+            CreateNeuronArgs, CreateProposalArgs, DisburseArgs, IcpNeuronArgs, IcpNeuronIdentifier,
+            SpawnArgs,
+        },
         config::Config,
         icp_neuron_reference::IcpNeuronReferenceResponse,
-        modules::{
-            CreateNeuronArgs, CreateProposalArgs, DisburseArgs, IcpNeuronArgs, IcpNeuronIdentifier,
-            ModuleResponse, NeuronType, SpawnArgs,
-        },
+        modules::{ModuleResponse, NeuronType},
     },
 };
 use test_helper::{context::Context, sender::Sender};

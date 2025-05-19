@@ -18,8 +18,9 @@ use crate::{
     helpers::subaccount_helper::generate_subaccount_by_nonce,
     storage::{icp_neuron_reference_storage::IcpNeuronReferenceStore, log_storage::LogStore},
     types::{
+        args::icp_neuron_args::{IcpNeuronArgs, IcpNeuronIdentifier, Vote},
         icp_neuron_reference::{IcpNeuronReference, IcpNeuronReferenceResponse},
-        modules::{IcpNeuronArgs, IcpNeuronIdentifier, ModuleResponse, Vote},
+        modules::ModuleResponse,
         topic::Topic,
     },
 };

@@ -18,6 +18,7 @@ validator = "^0.20.0"
 pocket-ic = "9.0.0"
 ic-management-canister-types = "0.3.0"
 toolkit-utils = {path = "../toolkit_utils"}
+icrc-ledger-types = "0.15.0"
 # toolkit-utils = {git = "https://github.com/toolkit-development/toolkit-utils"}
 ic-ledger-types = "0.15.0"
 sha2 = "0.10.8"

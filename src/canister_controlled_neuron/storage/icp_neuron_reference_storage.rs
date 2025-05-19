@@ -5,14 +5,16 @@ use toolkit_utils::{
     StaticStorageRef,
 };
 
-use crate::types::{icp_neuron_reference::IcpNeuronReference, modules::IcpNeuronIdentifier};
+use crate::types::{
+    args::icp_neuron_args::IcpNeuronIdentifier, icp_neuron_reference::IcpNeuronReference,
+};
 
 use super::storages::ICP_NEURON_REFERENCES;
 
 pub struct IcpNeuronReferenceStore;
 
 impl Storage<u64, IcpNeuronReference> for IcpNeuronReferenceStore {
-    const NAME: &'static str = "neuron_reference";
+    const NAME: &'static str = "icp_neuron_reference";
 
     fn storage() -> StaticStorageRef<u64, IcpNeuronReference> {
         &ICP_NEURON_REFERENCES
