@@ -16,18 +16,18 @@ jobs:
           lint: true
           test: true
           gzip: true
-          package: canister_controlled_neurons
+          package: canister_controlled_neuron
 
       - name: Deploy
         uses: ./.github/actions/deploy
         with:
           identity: ${{ secrets.IDENTITY_DEV }}
-          canister_name: canister_controlled_neurons
+          canister_name: canister_controlled_neuron
           network: dev
-          wasm_file: wasm/canister_controlled_neurons.wasm
+          wasm_file: wasm/canister_controlled_neuron.wasm
           
       # - name: Release
       #   uses: ./.github/actions/release
       #   with:
-      #     wasm_file: wasm/canister_controlled_neurons.wasm.gz
+      #     wasm_file: wasm/canister_controlled_neuron.wasm.gz
       #     github_token: ${{ secrets.GITHUB_TOKEN }}
