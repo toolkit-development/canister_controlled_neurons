@@ -1,0 +1,27 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches: [ master ]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Build
+        uses: ./.github/actions/build
+        with:
+          lint: true
+          test: true
+          gzip: true
+          package: canister_controlled_neurons
+
+      - name: Deploy
+        uses: ./.github/actions/deploy
+        with:
+          identity: ${{ secrets.IDENTITY_DEV }}
+          canister_name: canister_controlled_neurons
+          network: dev
+          wasm_file: wasm/canister_controlled_neurons.wasm
