@@ -18,16 +18,16 @@ use crate::{
     helpers::subaccount_helper::generate_subaccount_by_nonce,
     storage::{icp_neuron_reference_storage::IcpNeuronReferenceStore, log_storage::LogStore},
     types::{
-        args::icp_neuron_args::{IcpNeuronArgs, IcpNeuronIdentifier, Vote},
+        args::icp_neuron_args::{IcpNeuronArgs, IcpNeuronIdentifier, IcpNeuronVote},
         icp_neuron_reference::{IcpNeuronReference, IcpNeuronReferenceResponse},
         modules::ModuleResponse,
         topic::Topic,
     },
 };
 
-pub struct NeuronLogic;
+pub struct ICPNeuronLogic;
 
-impl NeuronLogic {
+impl ICPNeuronLogic {
     pub fn remove_neuron(id: u64) -> CanisterResult<()> {
         IcpNeuronReferenceStore::remove(id);
         Ok(())
@@ -240,7 +240,7 @@ impl NeuronLogic {
     pub async fn vote(
         identifier: &IcpNeuronIdentifier,
         proposal_id: u64,
-        vote: Vote,
+        vote: IcpNeuronVote,
     ) -> CanisterResult<bool> {
         let (_, neuron) = IcpNeuronReferenceStore::get_by_identifier(identifier)?;
         let result = neuron.vote(proposal_id, vote).await.map_err(|e| {
@@ -307,56 +307,60 @@ impl NeuronLogic {
     pub async fn handle_icp_neuron_args(args: IcpNeuronArgs) -> CanisterResult<ModuleResponse> {
         match args {
             IcpNeuronArgs::Create(args) => {
-                let result = NeuronLogic::create_neuron(
+                let result = ICPNeuronLogic::create_neuron(
                     args.amount_e8s,
                     args.auto_stake,
                     args.dissolve_delay_seconds,
                 )
                 .await?;
-                Ok(ModuleResponse::Neuron(Box::new(result)))
+                Ok(ModuleResponse::IcpNeuron(Box::new(result)))
             }
             IcpNeuronArgs::TopUp(args) => {
-                let result = NeuronLogic::top_up_neuron(&args.identifier, args.amount_e8s).await?;
+                let result =
+                    ICPNeuronLogic::top_up_neuron(&args.identifier, args.amount_e8s).await?;
                 Ok(ModuleResponse::Boolean(result))
             }
             IcpNeuronArgs::AddDissolveDelay(args) => {
-                let result =
-                    NeuronLogic::add_dissolve_delay(&args.identifier, args.dissolve_delay_seconds)
-                        .await?;
+                let result = ICPNeuronLogic::add_dissolve_delay(
+                    &args.identifier,
+                    args.dissolve_delay_seconds,
+                )
+                .await?;
                 Ok(ModuleResponse::Boolean(result))
             }
             IcpNeuronArgs::SetDissolveState(args) => {
                 let result =
-                    NeuronLogic::set_dissolve_state(&args.identifier, args.start_dissolving)
+                    ICPNeuronLogic::set_dissolve_state(&args.identifier, args.start_dissolving)
                         .await?;
                 Ok(ModuleResponse::Boolean(result))
             }
             IcpNeuronArgs::AutoStake(args) => {
                 let result =
-                    NeuronLogic::auto_stake_maturity(&args.identifier, args.auto_stake).await?;
+                    ICPNeuronLogic::auto_stake_maturity(&args.identifier, args.auto_stake).await?;
                 Ok(ModuleResponse::Boolean(result))
             }
             IcpNeuronArgs::Spawn(args) => {
                 let result =
-                    NeuronLogic::spawn_neuron(&args.identifier, args.start_dissolving).await?;
+                    ICPNeuronLogic::spawn_neuron(&args.identifier, args.start_dissolving).await?;
                 Ok(ModuleResponse::Boolean(result))
             }
             IcpNeuronArgs::CreateProposal(args) => {
-                let result = NeuronLogic::create_proposal(&args.identifier, args.proposal).await?;
+                let result =
+                    ICPNeuronLogic::create_proposal(&args.identifier, args.proposal).await?;
                 Ok(ModuleResponse::MakeProposalResponse(Box::new(result)))
             }
             IcpNeuronArgs::Vote(args) => {
                 let result =
-                    NeuronLogic::vote(&args.identifier, args.proposal_id, args.vote).await?;
+                    ICPNeuronLogic::vote(&args.identifier, args.proposal_id, args.vote).await?;
                 Ok(ModuleResponse::Boolean(result))
             }
             IcpNeuronArgs::Disburse(args) => {
-                let _ = NeuronLogic::disburse(&args.identifier).await?;
+                let _ = ICPNeuronLogic::disburse(&args.identifier).await?;
                 Ok(ModuleResponse::Boolean(true))
             }
             IcpNeuronArgs::SetFollowing(set_following_args) => {
                 for arg in set_following_args.following {
-                    NeuronLogic::set_following(
+                    ICPNeuronLogic::set_following(
                         &set_following_args.identifier,
                         arg.topic,
                         arg.followees,
@@ -385,7 +389,7 @@ impl NeuronLogic {
             }
             IcpNeuronArgs::TopUp(args) => {
                 IcpNeuronReferenceStore::get_by_identifier(&args.identifier)?;
-                NeuronLogic::get_full_neuron(&args.identifier).await?;
+                ICPNeuronLogic::get_full_neuron(&args.identifier).await?;
                 let balance = get_icp_balance(canister_self()).await?;
                 if balance.e8s() < args.amount_e8s {
                     return Err(ApiError::bad_request("Insufficient balance"));
@@ -400,22 +404,22 @@ impl NeuronLogic {
             }
             IcpNeuronArgs::AddDissolveDelay(args) => {
                 IcpNeuronReferenceStore::get_by_identifier(&args.identifier)?;
-                NeuronLogic::get_full_neuron(&args.identifier).await?;
+                ICPNeuronLogic::get_full_neuron(&args.identifier).await?;
                 Ok(serde_json::to_string(&args).unwrap())
             }
             IcpNeuronArgs::SetDissolveState(args) => {
                 IcpNeuronReferenceStore::get_by_identifier(&args.identifier)?;
-                NeuronLogic::get_full_neuron(&args.identifier).await?;
+                ICPNeuronLogic::get_full_neuron(&args.identifier).await?;
                 Ok(serde_json::to_string(&args).unwrap())
             }
             IcpNeuronArgs::AutoStake(args) => {
                 IcpNeuronReferenceStore::get_by_identifier(&args.identifier)?;
-                NeuronLogic::get_full_neuron(&args.identifier).await?;
+                ICPNeuronLogic::get_full_neuron(&args.identifier).await?;
                 Ok(serde_json::to_string(&args).unwrap())
             }
             IcpNeuronArgs::Spawn(args) => {
                 IcpNeuronReferenceStore::get_by_identifier(&args.identifier)?;
-                let neuron = NeuronLogic::get_full_neuron(&args.identifier).await?;
+                let neuron = ICPNeuronLogic::get_full_neuron(&args.identifier).await?;
                 if neuron.maturity_e8s_equivalent < 100000000 {
                     return Err(ApiError::bad_request(
                         "neuron must have at least 1 ICP in maturity to spawn",
@@ -425,22 +429,22 @@ impl NeuronLogic {
             }
             IcpNeuronArgs::CreateProposal(create_proposal_args) => {
                 IcpNeuronReferenceStore::get_by_identifier(&create_proposal_args.identifier)?;
-                NeuronLogic::get_full_neuron(&create_proposal_args.identifier).await?;
+                ICPNeuronLogic::get_full_neuron(&create_proposal_args.identifier).await?;
                 Ok(serde_json::to_string(&create_proposal_args).unwrap())
             }
             IcpNeuronArgs::Vote(vote_args) => {
                 IcpNeuronReferenceStore::get_by_identifier(&vote_args.identifier)?;
-                NeuronLogic::get_full_neuron(&vote_args.identifier).await?;
+                ICPNeuronLogic::get_full_neuron(&vote_args.identifier).await?;
                 Ok(serde_json::to_string(&vote_args).unwrap())
             }
             IcpNeuronArgs::Disburse(disburse_args) => {
                 IcpNeuronReferenceStore::get_by_identifier(&disburse_args.identifier)?;
-                NeuronLogic::get_full_neuron(&disburse_args.identifier).await?;
+                ICPNeuronLogic::get_full_neuron(&disburse_args.identifier).await?;
                 Ok(serde_json::to_string(&disburse_args).unwrap())
             }
             IcpNeuronArgs::SetFollowing(set_following_args) => {
                 IcpNeuronReferenceStore::get_by_identifier(&set_following_args.identifier)?;
-                NeuronLogic::get_full_neuron(&set_following_args.identifier).await?;
+                ICPNeuronLogic::get_full_neuron(&set_following_args.identifier).await?;
                 Ok(serde_json::to_string(&set_following_args).unwrap())
             }
         }

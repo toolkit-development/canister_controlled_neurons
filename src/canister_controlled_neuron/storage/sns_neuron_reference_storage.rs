@@ -5,9 +5,7 @@ use toolkit_utils::{
     StaticStorageRef,
 };
 
-use crate::types::{
-    args::sns_neuron_args::SnsNeuronIdentifier, sns_neuron_reference::SnsNeuronReference,
-};
+use crate::types::sns_neuron_reference::SnsNeuronReference;
 
 use super::storages::SNS_NEURON_REFERENCES;
 
@@ -30,24 +28,13 @@ impl SnsNeuronReferenceStore {
         Self::storage().with(|data| data.borrow().last_key_value().map(|(k, _)| k).unwrap_or(0))
     }
 
-    pub fn get_by_identifier(
-        identifier: &SnsNeuronIdentifier,
-    ) -> CanisterResult<(u64, SnsNeuronReference)> {
-        match identifier {
-            SnsNeuronIdentifier::NeuronId(neuron_id) => Self::storage().with(|data| {
-                data.borrow()
-                    .iter()
-                    .find(|(_, neuron)| neuron.neuron_id == Some(neuron_id.clone()))
-                    .map(|(id, neuron)| (id, neuron.clone()))
-                    .ok_or_else(|| ApiError::not_found("Neuron not found"))
-            }),
-            SnsNeuronIdentifier::Subaccount(subaccount) => Self::storage().with(|data| {
-                data.borrow()
-                    .iter()
-                    .find(|(_, neuron)| neuron.subaccount == *subaccount)
-                    .map(|(id, neuron)| (id, neuron.clone()))
-                    .ok_or_else(|| ApiError::not_found("Neuron not found"))
-            }),
-        }
+    pub fn get_by_id(neuron_id: Vec<u8>) -> CanisterResult<(u64, SnsNeuronReference)> {
+        Self::storage().with(|data| {
+            data.borrow()
+                .iter()
+                .find(|(_, neuron)| neuron.neuron_id == Some(neuron_id.clone()))
+                .map(|(id, neuron)| (id, neuron.clone()))
+                .ok_or_else(|| ApiError::not_found("Neuron not found"))
+        })
     }
 }

@@ -1,7 +1,10 @@
 use candid::CandidType;
 use serde::{Deserialize, Serialize};
 
-use crate::{api::icp_governance_api::MakeProposalRequest, types::topic::Topic};
+use crate::{
+    api::icp_governance_api::{MakeProposalRequest, ManageNeuronCommandRequest},
+    types::topic::Topic,
+};
 
 #[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
 pub enum IcpNeuronIdentifier {
@@ -12,87 +15,93 @@ pub enum IcpNeuronIdentifier {
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
 pub enum IcpNeuronArgs {
-    Create(CreateIcpNeuronArgs),
-    TopUp(TopUpIcpNeuronArgs),
-    AddDissolveDelay(AddIcpNeuronDissolveDelayArgs),
-    SetDissolveState(SetIcpNeuronDissolveStateArgs),
-    AutoStake(AutoStakeIcpNeuronArgs),
-    Spawn(SpawnIcpNeuronArgs),
-    CreateProposal(CreateIcpNeuronProposalArgs),
-    Vote(VoteIcpNeuronArgs),
-    Disburse(DisburseIcpNeuronArgs),
-    SetFollowing(SetIcpNeuronFollowingArgs),
+    Create(CreateNeuronArgs),
+    TopUp(TopUpNeuronArgs),
+    AddDissolveDelay(AddDissolveDelayArgs),
+    SetDissolveState(SetDissolveStateArgs),
+    AutoStake(AutoStakeArgs),
+    Spawn(SpawnArgs),
+    CreateProposal(CreateProposalArgs),
+    Vote(VoteArgs),
+    Disburse(DisburseArgs),
+    SetFollowing(SetFollowingArgs),
 }
 
 #[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
-pub struct CreateIcpNeuronArgs {
+pub struct SetFollowingArgs {
+    pub identifier: IcpNeuronIdentifier,
+    pub following: Vec<FollowingArgs>,
+}
+
+#[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
+pub struct FollowingArgs {
+    pub topic: Topic,
+    pub followees: Vec<u64>,
+}
+
+#[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
+pub struct DisburseArgs {
+    pub identifier: IcpNeuronIdentifier,
+}
+
+#[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
+pub struct VoteArgs {
+    pub identifier: IcpNeuronIdentifier,
+    pub proposal_id: u64,
+    pub vote: Vote,
+}
+
+#[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
+pub enum Vote {
+    Approve,
+    Reject,
+}
+
+#[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
+pub struct CreateProposalArgs {
+    pub identifier: IcpNeuronIdentifier,
+    pub proposal: MakeProposalRequest,
+}
+
+#[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
+pub struct SpawnArgs {
+    pub identifier: IcpNeuronIdentifier,
+    pub start_dissolving: bool,
+}
+
+#[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
+pub struct AutoStakeArgs {
+    pub identifier: IcpNeuronIdentifier,
+    pub auto_stake: bool,
+}
+
+#[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
+pub struct SetDissolveStateArgs {
+    pub identifier: IcpNeuronIdentifier,
+    pub start_dissolving: bool,
+}
+
+#[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
+pub struct AddDissolveDelayArgs {
+    pub identifier: IcpNeuronIdentifier,
+    pub dissolve_delay_seconds: u64,
+}
+
+#[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
+pub struct CreateNeuronArgs {
     pub amount_e8s: u64,
     pub auto_stake: Option<bool>,
     pub dissolve_delay_seconds: Option<u64>,
 }
 
 #[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
-pub struct TopUpIcpNeuronArgs {
+pub struct TopUpNeuronArgs {
     pub identifier: IcpNeuronIdentifier,
     pub amount_e8s: u64,
 }
 
 #[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
-pub struct SetIcpNeuronFollowingArgs {
+pub struct CommandNeuronArgs {
     pub identifier: IcpNeuronIdentifier,
-    pub following: Vec<IcpNeuronFollowingArgs>,
-}
-
-#[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
-pub struct IcpNeuronFollowingArgs {
-    pub topic: Topic,
-    pub followees: Vec<u64>,
-}
-
-#[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
-pub struct DisburseIcpNeuronArgs {
-    pub identifier: IcpNeuronIdentifier,
-}
-
-#[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
-pub struct VoteIcpNeuronArgs {
-    pub identifier: IcpNeuronIdentifier,
-    pub proposal_id: u64,
-    pub vote: IcpNeuronVote,
-}
-
-#[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
-pub enum IcpNeuronVote {
-    Approve,
-    Reject,
-}
-
-#[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
-pub struct CreateIcpNeuronProposalArgs {
-    pub identifier: IcpNeuronIdentifier,
-    pub proposal: MakeProposalRequest,
-}
-
-#[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
-pub struct SpawnIcpNeuronArgs {
-    pub identifier: IcpNeuronIdentifier,
-    pub start_dissolving: bool,
-}
-
-#[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
-pub struct AutoStakeIcpNeuronArgs {
-    pub identifier: IcpNeuronIdentifier,
-    pub auto_stake: bool,
-}
-
-#[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
-pub struct SetIcpNeuronDissolveStateArgs {
-    pub identifier: IcpNeuronIdentifier,
-    pub start_dissolving: bool,
-}
-
-#[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
-pub struct AddIcpNeuronDissolveDelayArgs {
-    pub identifier: IcpNeuronIdentifier,
-    pub dissolve_delay_seconds: u64,
+    pub command: ManageNeuronCommandRequest,
 }

@@ -26,7 +26,7 @@ use crate::{
     },
 };
 
-use super::{args::icp_neuron_args::Vote, topic::Topic};
+use super::{args::icp_neuron_args::IcpNeuronVote, topic::Topic};
 
 impl_storable_for!(IcpNeuronReference);
 
@@ -195,13 +195,13 @@ impl IcpNeuronReference {
         }
     }
 
-    pub async fn vote(&self, proposal_id: u64, vote: Vote) -> CanisterResult<bool> {
+    pub async fn vote(&self, proposal_id: u64, vote: IcpNeuronVote) -> CanisterResult<bool> {
         let result = self
             .command(ManageNeuronCommandRequest::RegisterVote(RegisterVote {
                 proposal: Some(ProposalId { id: proposal_id }),
                 vote: match vote {
-                    Vote::Approve => 1,
-                    Vote::Reject => 2,
+                    IcpNeuronVote::Approve => 1,
+                    IcpNeuronVote::Reject => 2,
                 },
             }))
             .await?;

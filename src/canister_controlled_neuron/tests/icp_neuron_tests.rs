@@ -5,8 +5,8 @@ use canister_controlled_neuron::{
     api::icp_governance_api::{MakeProposalRequest, Motion, Neuron, ProposalActionRequest},
     types::{
         args::icp_neuron_args::{
-            CreateNeuronArgs, CreateProposalArgs, DisburseArgs, IcpNeuronArgs, IcpNeuronIdentifier,
-            SpawnArgs,
+            CreateIcpNeuronArgs, CreateIcpNeuronProposalArgs, DisburseIcpNeuronArgs, IcpNeuronArgs,
+            IcpNeuronIdentifier, SpawnIcpNeuronArgs,
         },
         config::Config,
         icp_neuron_reference::IcpNeuronReferenceResponse,
@@ -50,7 +50,7 @@ fn test_create_neuron_blanco() -> Result<(), String> {
     assert!(balance.is_ok());
     assert!(balance.unwrap() == 10_000_000_000u64);
 
-    let args: NeuronType = NeuronType::Icp(IcpNeuronArgs::Create(CreateNeuronArgs {
+    let args: NeuronType = NeuronType::Icp(IcpNeuronArgs::Create(CreateIcpNeuronArgs {
         amount_e8s: 1_000_000_000,
         auto_stake: None,
         dissolve_delay_seconds: None,
@@ -116,7 +116,7 @@ fn test_create_neuron_with_dissolve_delay() -> Result<(), String> {
     assert!(balance.is_ok());
     assert!(balance.unwrap() == 10_000_000_000u64);
 
-    let args: NeuronType = NeuronType::Icp(IcpNeuronArgs::Create(CreateNeuronArgs {
+    let args: NeuronType = NeuronType::Icp(IcpNeuronArgs::Create(CreateIcpNeuronArgs {
         amount_e8s: 1_000_000_000,
         auto_stake: None,
         dissolve_delay_seconds: Some(255_000_000), // more then 8 years in seconds
@@ -182,7 +182,7 @@ fn test_create_neuron_with_auto_stake() -> Result<(), String> {
     assert!(balance.is_ok());
     assert!(balance.unwrap() == 10_000_000_000u64);
 
-    let args: NeuronType = NeuronType::Icp(IcpNeuronArgs::Create(CreateNeuronArgs {
+    let args: NeuronType = NeuronType::Icp(IcpNeuronArgs::Create(CreateIcpNeuronArgs {
         amount_e8s: 1_000_000_000,
         auto_stake: Some(true),
         dissolve_delay_seconds: None,
@@ -246,7 +246,7 @@ fn test_create_proposal() -> Result<(), String> {
     assert!(balance.is_ok());
     assert!(balance.unwrap() == 10_000_010_000u64);
 
-    let args: NeuronType = NeuronType::Icp(IcpNeuronArgs::Create(CreateNeuronArgs {
+    let args: NeuronType = NeuronType::Icp(IcpNeuronArgs::Create(CreateIcpNeuronArgs {
         amount_e8s: 10_000_000_000u64,
         auto_stake: Some(false),
         dissolve_delay_seconds: Some(255_000_000),
@@ -268,17 +268,18 @@ fn test_create_proposal() -> Result<(), String> {
     assert!(!neuron_references_unwrapped.is_empty());
     let subaccount = IcpNeuronIdentifier::Subaccount(neuron_references_unwrapped[0].subaccount);
 
-    let args: NeuronType = NeuronType::Icp(IcpNeuronArgs::CreateProposal(CreateProposalArgs {
-        identifier: subaccount.clone(),
-        proposal: MakeProposalRequest {
-            title: Some("Test proposal".to_string()),
-            summary: "Simulate governance vote".to_string(),
-            action: Some(ProposalActionRequest::Motion(Motion {
-                motion_text: "Approve something".to_string(),
-            })),
-            url: "".to_string(),
-        },
-    }));
+    let args: NeuronType =
+        NeuronType::Icp(IcpNeuronArgs::CreateProposal(CreateIcpNeuronProposalArgs {
+            identifier: subaccount.clone(),
+            proposal: MakeProposalRequest {
+                title: Some("Test proposal".to_string()),
+                summary: "Simulate governance vote".to_string(),
+                action: Some(ProposalActionRequest::Motion(Motion {
+                    motion_text: "Approve something".to_string(),
+                })),
+                url: "".to_string(),
+            },
+        }));
     let _ = context.update::<CanisterResult<ModuleResponse>>(
         Sender::Other(context.config.governance_canister_id),
         "tk_service_manage_neuron",
@@ -344,7 +345,7 @@ fn test_spawn_neuron_manual_disburse() -> Result<(), String> {
     assert!(balance.is_ok());
     assert!(balance.unwrap() == 10_000_010_000u64);
 
-    let args: NeuronType = NeuronType::Icp(IcpNeuronArgs::Create(CreateNeuronArgs {
+    let args: NeuronType = NeuronType::Icp(IcpNeuronArgs::Create(CreateIcpNeuronArgs {
         amount_e8s: 10_000_000_000u64,
         auto_stake: Some(false),
         dissolve_delay_seconds: Some(255_000_000),
@@ -371,17 +372,18 @@ fn test_spawn_neuron_manual_disburse() -> Result<(), String> {
     assert!(!neuron_references_unwrapped.is_empty());
     let subaccount = IcpNeuronIdentifier::Subaccount(neuron_references_unwrapped[0].subaccount);
 
-    let args: NeuronType = NeuronType::Icp(IcpNeuronArgs::CreateProposal(CreateProposalArgs {
-        identifier: subaccount.clone(),
-        proposal: MakeProposalRequest {
-            title: Some("Test proposal".to_string()),
-            summary: "Simulate governance vote".to_string(),
-            action: Some(ProposalActionRequest::Motion(Motion {
-                motion_text: "Approve something".to_string(),
-            })),
-            url: "".to_string(),
-        },
-    }));
+    let args: NeuronType =
+        NeuronType::Icp(IcpNeuronArgs::CreateProposal(CreateIcpNeuronProposalArgs {
+            identifier: subaccount.clone(),
+            proposal: MakeProposalRequest {
+                title: Some("Test proposal".to_string()),
+                summary: "Simulate governance vote".to_string(),
+                action: Some(ProposalActionRequest::Motion(Motion {
+                    motion_text: "Approve something".to_string(),
+                })),
+                url: "".to_string(),
+            },
+        }));
     let _ = context.update::<CanisterResult<ModuleResponse>>(
         Sender::Other(context.config.governance_canister_id),
         "tk_service_manage_neuron",
@@ -412,7 +414,7 @@ fn test_spawn_neuron_manual_disburse() -> Result<(), String> {
     let neuron_info_unwrapped = neuron_info.unwrap();
     assert!(neuron_info_unwrapped.maturity_e8s_equivalent > 0);
 
-    let args: NeuronType = NeuronType::Icp(IcpNeuronArgs::Spawn(SpawnArgs {
+    let args: NeuronType = NeuronType::Icp(IcpNeuronArgs::Spawn(SpawnIcpNeuronArgs {
         identifier: subaccount.clone(),
         start_dissolving: true,
     }));
@@ -467,9 +469,10 @@ fn test_spawn_neuron_manual_disburse() -> Result<(), String> {
     let neuron_info_unwrapped = neuron_info.unwrap();
     assert!(neuron_info_unwrapped.maturity_e8s_equivalent == 0);
 
-    let disburse_args: NeuronType = NeuronType::Icp(IcpNeuronArgs::Disburse(DisburseArgs {
-        identifier: IcpNeuronIdentifier::Subaccount(neuron_references_unwrapped[1].subaccount),
-    }));
+    let disburse_args: NeuronType =
+        NeuronType::Icp(IcpNeuronArgs::Disburse(DisburseIcpNeuronArgs {
+            identifier: IcpNeuronIdentifier::Subaccount(neuron_references_unwrapped[1].subaccount),
+        }));
 
     let disburse_result = context.update::<CanisterResult<ModuleResponse>>(
         Sender::Other(context.config.governance_canister_id),

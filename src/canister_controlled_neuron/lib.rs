@@ -18,6 +18,7 @@ pub fn __get_candid_interface_tmp_hack() -> String {
     use crate::types::config::Config;
     use crate::types::icp_neuron_reference::IcpNeuronReferenceResponse;
     use crate::types::modules::*;
+    use crate::types::sns_neuron_reference::SnsNeuronReferenceResponse;
     use toolkit_utils::icrc_types::*;
     use toolkit_utils::result::CanisterResult;
     export_service!();

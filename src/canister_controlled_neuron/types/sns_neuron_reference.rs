@@ -2,23 +2,24 @@ use candid::{CandidType, Nat};
 use ic_cdk::api::{canister_self, time};
 use serde::{Deserialize, Serialize};
 use toolkit_utils::{
-    api_error::ApiError,
-    impl_storable_for,
-    result::CanisterResult,
-    storage::{StorageInsertable, StorageUpdateable},
+    api_error::ApiError, cell::CellStorage, impl_storable_for, result::CanisterResult,
+    storage::StorageInsertable,
 };
 
 use crate::{
     api::{
         api_clients::ApiClients,
         sns_governance_api::{
-            By, ClaimOrRefresh, ClaimOrRefreshResponse, Command, Command1, ManageNeuron,
-            MemoAndController,
+            By, ChangeAutoStakeMaturity, ClaimOrRefresh, ClaimOrRefreshResponse, Command, Command1,
+            Configure, IncreaseDissolveDelay, ManageNeuron, MemoAndController, Operation,
         },
         sns_ledger_api::{Account, Result_, TransferArg},
     },
     helpers::subaccount_helper::generate_subaccount_by_nonce,
-    storage::{log_storage::LogStore, sns_neuron_reference_storage::SnsNeuronReferenceStore},
+    storage::{
+        config_storage::config_store, log_storage::LogStore,
+        sns_neuron_reference_storage::SnsNeuronReferenceStore,
+    },
 };
 
 impl_storable_for!(SnsNeuronReference);
@@ -110,31 +111,6 @@ impl SnsNeuronReference {
         }
     }
 
-    pub async fn create_neuron(amount_e8s: u64) -> CanisterResult<SnsNeuronReferenceResponse> {
-        let neuron = SnsNeuronReference::new(amount_e8s).await.map_err(|e| {
-            let _ = LogStore::insert(format!("{}: Error creating SNS neuron: {}", time(), e));
-            e
-        })?;
-        let (id, mut neuron) = SnsNeuronReferenceStore::insert(neuron.clone())?;
-
-        let claimed_neuron = neuron.claim_or_refresh().await.map_err(|e| {
-            let _ = LogStore::insert(format!(
-                "{}: Error claiming or refreshing neuron: {}",
-                time(),
-                e
-            ));
-            e
-        })?;
-
-        if let Some(refreshed_neuron_id) = claimed_neuron.refreshed_neuron_id {
-            neuron.neuron_id = Some(refreshed_neuron_id.id);
-        }
-
-        let response = SnsNeuronReferenceStore::update(id, neuron.clone())?;
-
-        Ok(response.1.to_response(response.0))
-    }
-
     pub async fn claim_or_refresh(&mut self) -> CanisterResult<ClaimOrRefreshResponse> {
         let (result,) = ApiClients::sns_governance()
             .manage_neuron(ManageNeuron {
@@ -153,6 +129,111 @@ impl SnsNeuronReference {
             Some(Command1::ClaimOrRefresh(response)) => Ok(response),
             Some(Command1::Error(e)) => Err(ApiError::external_service_error(&e.error_message)),
             _ => Err(ApiError::external_service_error("Unknown command")),
+        }
+    }
+
+    pub async fn top_up(&self, amount_e8s: u64) -> CanisterResult<Nat> {
+        let config = config_store().get()?;
+
+        let transfer_arg = TransferArg {
+            to: Account {
+                owner: config.governance_canister_id,
+                subaccount: Some(self.subaccount.to_vec()),
+            },
+            fee: None,
+            memo: None,
+            from_subaccount: None,
+            created_at_time: None,
+            amount: Nat::from(amount_e8s),
+        };
+
+        let sns_ledger = ApiClients::sns_ledger();
+        let result = sns_ledger
+            .icrc_1_transfer(transfer_arg)
+            .await
+            .map_err(|e| {
+                let _ = LogStore::insert(format!("{}: Error top up SNS neuron: {:?}", time(), e));
+                e
+            })
+            .map_err(|e| {
+                let _ = LogStore::insert(format!("{}: Error top up SNS neuron: {:?}", time(), e));
+                ApiError::external_service_error("Error top up SNS neuron")
+            })?;
+
+        match result.0 {
+            Result_::Ok(result) => Ok(result),
+            Result_::Err(e) => {
+                let _ = LogStore::insert(format!("{}: Error top up SNS neuron: {:?}", time(), e));
+                Err(ApiError::external_service_error("Error top up SNS neuron"))
+            }
+        }
+    }
+
+    pub async fn increase_dissolve_delay(&self, dissolve_delay: u64) -> CanisterResult<()> {
+        self.configure(Operation::IncreaseDissolveDelay(IncreaseDissolveDelay {
+            additional_dissolve_delay_seconds: dissolve_delay as u32,
+        }))
+        .await
+    }
+
+    pub async fn set_dissolve_state(&self, start_dissolving: bool) -> CanisterResult<()> {
+        if start_dissolving {
+            self.configure(Operation::StartDissolving {})
+        } else {
+            self.configure(Operation::StopDissolving {})
+        }
+        .await?;
+        Ok(())
+    }
+
+    pub async fn auto_stake_maturity(&self, auto_stake: bool) -> CanisterResult<Command1> {
+        let result = self
+            .command(Command::Configure(Configure {
+                operation: Some(Operation::ChangeAutoStakeMaturity(
+                    ChangeAutoStakeMaturity {
+                        requested_setting_for_auto_stake_maturity: auto_stake,
+                    },
+                )),
+            }))
+            .await?;
+        Ok(result)
+    }
+
+    pub async fn command(&self, command: Command) -> CanisterResult<Command1> {
+        match &self.neuron_id {
+            Some(neuron_id) => {
+                let (result,) = ApiClients::sns_governance()
+                    .manage_neuron(ManageNeuron {
+                        command: Some(command),
+                        subaccount: neuron_id.to_vec(),
+                    })
+                    .await
+                    .map_err(|(_, e)| ApiError::external_service_error(e.as_str()))?;
+
+                if let Some(command_result) = result.command {
+                    match command_result {
+                        Command1::Error(e) => {
+                            Err(ApiError::external_service_error(e.error_message.as_str()))
+                        }
+                        _ => Ok(command_result),
+                    }
+                } else {
+                    Err(ApiError::external_service_error("Unknown command"))
+                }
+            }
+            None => Err(ApiError::bad_request("Neuron not claimed yet")),
+        }
+    }
+
+    pub async fn configure(&self, operation: Operation) -> CanisterResult<()> {
+        let result = self
+            .command(Command::Configure(Configure {
+                operation: Some(operation),
+            }))
+            .await?;
+        match result {
+            Command1::Configure {} => Ok(()),
+            _ => Err(ApiError::external_service_error("Unexpected response")),
         }
     }
 

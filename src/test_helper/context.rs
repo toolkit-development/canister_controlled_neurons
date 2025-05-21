@@ -66,6 +66,7 @@ impl Context {
         let pic = PocketIcBuilder::new()
             .with_nns_subnet()
             .with_nns_state(nns_state_path) // this first included state is the nns subnet id
+            .with_sns_subnet()
             .with_application_subnet()
             .build();
 

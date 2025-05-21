@@ -11,7 +11,7 @@ use crate::types::{
 };
 
 pub static CONFIG_MEMORY_ID: MemoryId = MemoryId::new(0);
-pub static ICP_NEURON_REFERENCES_MEMORY_ID: MemoryId = MemoryId::new(2);
+pub static ICP_NEURON_REFERENCES_MEMORY_ID: MemoryId = MemoryId::new(1);
 pub static SNS_NEURON_REFERENCES_MEMORY_ID: MemoryId = MemoryId::new(2);
 
 pub static LOG_MEMORY_ID: MemoryId = MemoryId::new(254);
