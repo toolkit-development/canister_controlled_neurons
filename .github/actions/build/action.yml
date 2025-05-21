@@ -36,6 +36,18 @@ runs:
     - name: Setup Cache
       uses: Swatinem/rust-cache@v2
 
+    - name: Download NNS State
+      shell: bash
+      if: inputs.test == 'true'
+      run: |
+        mkdir -p src/test_helper
+        curl -L -o src/test_helper/nns_state.tar.gz https://github.com/${{ github.repository }}/releases/download/nns-state/nns_state.tar.gz
+
+    - name: Prepare Test Environment
+      shell: bash
+      if: inputs.test == 'true'
+      run: bash scripts/prepare_test.sh
+
     - name: rustfmt
       shell: bash
       if: inputs.lint == 'true'
