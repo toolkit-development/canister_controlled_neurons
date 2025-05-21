@@ -2,7 +2,7 @@ name: Build and Deploy
 
 on:
   push:
-    branches: [ master ]
+    branches: [ feat/jb/add-pipeline ]
 
 jobs:
   build-and-deploy:
@@ -25,3 +25,9 @@ jobs:
           canister_name: canister_controlled_neurons
           network: dev
           wasm_file: wasm/canister_controlled_neurons.wasm
+          
+      # - name: Release
+      #   uses: ./.github/actions/release
+      #   with:
+      #     wasm_file: wasm/canister_controlled_neurons.wasm.gz
+      #     github_token: ${{ secrets.GITHUB_TOKEN }}
