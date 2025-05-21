@@ -267,7 +267,7 @@ fn test_create_proposal() -> Result<(), String> {
     assert!(!neuron_references_unwrapped.is_empty());
     let subaccount = &neuron_references_unwrapped[0].subaccount.clone();
 
-    let args: NeuronType = NeuronType::Icp(IcpNeuronArgs::CreateProposal(CreateProposalArgs {
+    let args: NeuronType = NeuronType::Icp(IcpNeuronArgs::CreateProposal(Box::new(CreateProposalArgs {
         subaccount: *subaccount,
         proposal: MakeProposalRequest {
             title: Some("Test proposal".to_string()),
@@ -277,7 +277,7 @@ fn test_create_proposal() -> Result<(), String> {
             })),
             url: "".to_string(),
         },
-    }));
+    })));
     let _ = context.update::<CanisterResult<ModuleResponse>>(
         Sender::Other(context.config.governance_canister_id),
         "tk_service_manage_neuron",
@@ -370,7 +370,7 @@ fn test_spawn_neuron_manual_disburse() -> Result<(), String> {
     assert!(!neuron_references_unwrapped.is_empty());
     let subaccount = &neuron_references_unwrapped[0].subaccount.clone();
 
-    let args: NeuronType = NeuronType::Icp(IcpNeuronArgs::CreateProposal(CreateProposalArgs {
+    let args: NeuronType = NeuronType::Icp(IcpNeuronArgs::CreateProposal(Box::new(CreateProposalArgs {
         subaccount: *subaccount,
         proposal: MakeProposalRequest {
             title: Some("Test proposal".to_string()),
@@ -380,7 +380,7 @@ fn test_spawn_neuron_manual_disburse() -> Result<(), String> {
             })),
             url: "".to_string(),
         },
-    }));
+    })));
     let _ = context.update::<CanisterResult<ModuleResponse>>(
         Sender::Other(context.config.governance_canister_id),
         "tk_service_manage_neuron",

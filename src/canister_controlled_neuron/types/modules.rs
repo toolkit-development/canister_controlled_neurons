@@ -30,7 +30,7 @@ pub enum IcpNeuronArgs {
     SetDissolveState(SetDissolveStateArgs),
     AutoStake(AutoStakeArgs),
     Spawn(SpawnArgs),
-    CreateProposal(CreateProposalArgs),
+    CreateProposal(Box<CreateProposalArgs>),
     Vote(VoteArgs),
     Disburse(DisburseArgs),
     SetFollowing(SetFollowingArgs),
