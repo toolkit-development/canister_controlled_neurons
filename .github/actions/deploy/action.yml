@@ -23,6 +23,8 @@ runs:
 
     - name: Authenticate dfx
       shell: bash
+      env:
+        DFX_WARNING: -mainnet_plaintext_identity
       run: |
         echo ${{ inputs.identity }} | base64 --decode > deploy_identity.pem
         dfx identity import --storage-mode=plaintext deploy_identity deploy_identity.pem
@@ -30,5 +32,7 @@ runs:
 
     - name: Deploy
       shell: bash
+      env:
+        DFX_WARNING: -mainnet_plaintext_identity
       run: |
         dfx canister install ${{ inputs.canister_name }} --network ${{ inputs.network }} --wasm ${{ inputs.wasm_file }} --mode upgrade
