@@ -1,23 +1,11 @@
 {
-  "canisters": {
-    "canister_controlled_neuron": {
-      "candid": "src/canister_controlled_neuron/canister_controlled_neuron.did",
-      "package": "src/canister_controlled_neuron",
+  "canisters":
+  {
+    "test": {
+      "candid": "canister/test.did",
       "type": "custom",
-      "wasm": "wasm/canister_controlled_neuron.wasm.gz",
-      "build": [
-        "bash scripts/build.sh"
-      ]
+      "build": "",
+      "wasm": ""
     }
-  },
-  "networks": {
-    "dev": {
-      "providers": [
-        "https://icp0.io"
-      ],
-      "type": "persistent"
-    }
-  },
-  "output_env_file": ".env",
-  "version": 1
+  }
 }

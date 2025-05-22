@@ -1,12 +1,12 @@
 use candid::{encode_args, CandidType, Decode, Encode, Principal};
 use canister_controlled_neuron::api::icp_governance_api::{
-    Action, By, ClaimOrRefresh, ClaimOrRefreshResponse, Command, Command1, Configure,
-    DissolveState, ExecuteNnsFunction, IncreaseDissolveDelay, MakeProposalRequest,
-    MakeProposalResponse, ManageNeuron, ManageNeuronCommandRequest, ManageNeuronRequest,
-    ManageNeuronResponse, Neuron, NeuronId, NeuronIdOrSubaccount, Operation, ProposalActionRequest,
-    Result2,
+    By, ClaimOrRefresh, ClaimOrRefreshResponse, Command, Command1, Configure, DissolveState,
+    ExecuteNnsFunction, IncreaseDissolveDelay, MakeProposalRequest, MakeProposalResponse,
+    ManageNeuron, ManageNeuronCommandRequest, ManageNeuronRequest, ManageNeuronResponse, NeuronId,
+    NeuronIdOrSubaccount, Operation, ProposalActionRequest, Result2,
 };
 use ic_ledger_types::MAINNET_GOVERNANCE_CANISTER_ID;
+use pocket_ic::common::rest::RawEffectivePrincipal;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use test_helper::{context::Context, sender::Sender};
@@ -23,7 +23,8 @@ fn deploy_sns_test() -> Result<(), String> {
     let context = Context::new();
 
     let balance = context.get_icp_balance(context.owner_account.owner);
-    println!("balance: {:?}", balance);
+    println!("initial user balance: {:?}", balance);
+    println!("--------------------------------");
     assert!(balance.is_ok());
 
     let subaccount = generate_subaccount_by_nonce(1, context.owner_account.owner);
@@ -41,7 +42,8 @@ fn deploy_sns_test() -> Result<(), String> {
 
     let balance =
         context.get_icp_balance_with_subaccount(MAINNET_GOVERNANCE_CANISTER_ID, subaccount);
-    println!("balance: {:?}", balance);
+    println!("governance + subaccount balance: {:?}", balance);
+    println!("--------------------------------");
     assert!(balance.is_ok());
 
     // claim or refresh neuron
@@ -67,6 +69,7 @@ fn deploy_sns_test() -> Result<(), String> {
         Decode!(result.as_slice(), ManageNeuronResponse).map_err(|e| e.to_string())?;
 
     println!("claim_or_refresh_result: {:?}", manage_neuron_result);
+    println!("--------------------------------");
 
     let neuron_id = match manage_neuron_result.command.unwrap() {
         Command1::ClaimOrRefresh(ClaimOrRefreshResponse {
@@ -98,7 +101,8 @@ fn deploy_sns_test() -> Result<(), String> {
         }
         _ => return Err("Invalid result".to_string()),
     };
-    println!("get_neuron_result: {:?}", neuron);
+    println!("newly created neuron: {:?}", neuron);
+    println!("--------------------------------");
 
     // set max dissolve delay
     let dissolve_delay_args = ManageNeuron {
@@ -125,7 +129,7 @@ fn deploy_sns_test() -> Result<(), String> {
         Decode!(result.as_slice(), ManageNeuronResponse).map_err(|e| e.to_string())?;
 
     println!("dissolve_delay_result: {:?}", manage_neuron_result);
-
+    println!("--------------------------------");
     // check if the dissolve delay is increased
     // get new neuron
     let result = context
@@ -150,7 +154,8 @@ fn deploy_sns_test() -> Result<(), String> {
         }
         _ => return Err("Invalid result".to_string()),
     };
-    println!("get_neuron_result: {:?}", neuron);
+    println!("updated neuron with dissolve delay: {:?}", neuron);
+    println!("--------------------------------");
 
     // set wasms via proposal
 
@@ -168,7 +173,10 @@ fn deploy_sns_test() -> Result<(), String> {
         },
     )?;
 
-    let ledger_proposal_id = match governance.command.unwrap() {
+    println!("governance proposal: {:?}", governance);
+    println!("--------------------------------");
+
+    let governance = match governance.command.unwrap() {
         Command1::MakeProposal(MakeProposalResponse {
             proposal_id,
             message: _,
@@ -178,16 +186,18 @@ fn deploy_sns_test() -> Result<(), String> {
 
     for _ in 0..100 {
         context.pic.tick();
+        // context.pic.advance_time(Duration::from_secs(3600));
     }
-    let ledger_proposal_info = context.get_proposal(ledger_proposal_id.id, Sender::Owner);
+    let ledger_proposal_info = context.get_proposal(governance.id, Sender::Owner);
     println!(
-        "ledger_proposal_info: {:?}",
+        "governance proposal failure reason: {:?}",
         ledger_proposal_info
             .clone()
             .unwrap()
             .unwrap()
             .failure_reason
     );
+    println!("--------------------------------");
     assert!(ledger_proposal_info.is_ok());
     Ok(())
 }
@@ -289,8 +299,9 @@ pub fn add_wasm_via_proposal(
 
     let result = context
         .pic
-        .update_call(
+        .update_call_with_effective_principal(
             MAINNET_GOVERNANCE_CANISTER_ID,
+            RawEffectivePrincipal::None,
             context.owner_account.owner,
             "manage_neuron",
             encode_args((manage_neuron_args,)).unwrap(),
