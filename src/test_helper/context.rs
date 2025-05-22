@@ -97,7 +97,7 @@ impl Context {
             config,
         };
 
-        context.mint_icp(100_000_000_000_000_000, owner_account.owner);
+        context.mint_icp(100_000_000_000_100_000, owner_account.owner);
         context
     }
 
@@ -286,6 +286,28 @@ impl Context {
                 MAINNET_GOVERNANCE_CANISTER_ID,
                 "icrc1_balance_of",
                 encode_args((Account::from(user_principal),)).unwrap(),
+            )
+            .expect("Failed to call canister");
+
+        Decode!(icp_balance_result.as_slice(), Nat).map_err(|e| e.to_string())
+    }
+
+    pub fn get_icp_balance_with_subaccount(
+        &self,
+        user_principal: Principal,
+        subaccount: [u8; 32],
+    ) -> Result<Nat, String> {
+        let icp_balance_result = self
+            .pic
+            .update_call(
+                MAINNET_LEDGER_CANISTER_ID,
+                MAINNET_GOVERNANCE_CANISTER_ID,
+                "icrc1_balance_of",
+                encode_args((Account {
+                    owner: user_principal,
+                    subaccount: Some(subaccount),
+                },))
+                .unwrap(),
             )
             .expect("Failed to call canister");
 
