@@ -16,6 +16,7 @@ serde = {workspace = true}
 toolkit-utils = { workspace = true}
 ic-management-canister-types = {workspace = true}
 rand = "0.9.1"
+lazy_static = "1.4.0"
 canister_controlled_neuron = {path = "../canister_controlled_neuron"}
 
 

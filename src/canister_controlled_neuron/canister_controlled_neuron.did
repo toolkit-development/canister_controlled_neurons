@@ -26,6 +26,10 @@ type AddIcpNeuronDissolveDelayArgs = record {
   identifier : IcpNeuronIdentifier;
 };
 type AddOrRemoveNodeProvider = record { change : opt Change };
+type AddSnsNeuronDissolveDelayArgs = record {
+  dissolve_delay_seconds : nat64;
+  neuron_id : blob;
+};
 type AdvanceSnsTargetVersion = record { new_target : opt SnsVersion };
 type Amount = record { e8s : nat64 };
 type ApiError = record {
@@ -59,6 +63,7 @@ type AutoStakeIcpNeuronArgs = record {
   auto_stake : bool;
   identifier : IcpNeuronIdentifier;
 };
+type AutoStakeSnsNeuronArgs = record { auto_stake : bool; neuron_id : blob };
 type BallotInfo = record { vote : int32; proposal_id : opt NeuronId };
 type By = variant {
   NeuronIdOrSubaccount : record {};
@@ -542,23 +547,18 @@ type SetTopicsForCustomProposals = record {
   custom_function_id_to_topic : vec record { nat64; Topic_1 };
 };
 type SetVisibility = record { visibility : opt int32 };
-type SnsNeuronAddDissolveDelayArgs = record {
-  dissolve_delay_seconds : nat64;
-  neuron_id : blob;
-};
 type SnsNeuronArgs = variant {
-  AutoStake : SnsNeuronAutoStakeArgs;
-  Spawn : SnsNeuronSpawnArgs;
-  AddDissolveDelay : SnsNeuronAddDissolveDelayArgs;
-  Vote : SnsNeuronVoteArgs;
-  SetDissolveState : SnsNeuronSpawnArgs;
+  AutoStake : AutoStakeSnsNeuronArgs;
+  Spawn : SpawnSnsNeuronArgs;
+  AddDissolveDelay : AddSnsNeuronDissolveDelayArgs;
+  Vote : VoteSnsNeuronArgs;
+  SetDissolveState : SpawnSnsNeuronArgs;
   TopUp : TopUpSnsNeuronArgs;
   CreateProposal : CreateSnsNeuronProposalArgs;
   Create : CreateSnsNeuronArgs;
   SetFollowing : SetSnsNeuronFollowingArgs;
   Disburse : DisburseSnsNeuronArgs;
 };
-type SnsNeuronAutoStakeArgs = record { auto_stake : bool; neuron_id : blob };
 type SnsNeuronFollowingArgs = record { topic : Topic_1; followees : vec blob };
 type SnsNeuronReferenceResponse = record {
   subaccount : blob;
@@ -568,12 +568,6 @@ type SnsNeuronReferenceResponse = record {
   storage_reference_id : nat64;
   parent_subaccount : opt blob;
   neuron_id : opt blob;
-};
-type SnsNeuronSpawnArgs = record { start_dissolving : bool; neuron_id : blob };
-type SnsNeuronVoteArgs = record {
-  vote : IcpNeuronVote;
-  proposal_id : nat64;
-  neuron_id : blob;
 };
 type SnsVersion = record {
   archive_wasm_hash : opt blob;
@@ -593,6 +587,7 @@ type SpawnIcpNeuronArgs = record {
   identifier : IcpNeuronIdentifier;
 };
 type SpawnResponse = record { created_neuron_id : opt NeuronId };
+type SpawnSnsNeuronArgs = record { start_dissolving : bool; neuron_id : blob };
 type Split = record { amount_e8s : nat64 };
 type StakeMaturity = record { percentage_to_stake : opt nat32 };
 type StakeMaturityResponse = record {
@@ -676,10 +671,24 @@ type UpgradeSnsControlledCanister = record {
   canister_upgrade_arg : opt blob;
 };
 type ValidationResponse = record { field : text; message : text };
+type Value = variant {
+  Int : int;
+  Map : vec record { text; Value };
+  Nat : nat;
+  Nat64 : nat64;
+  Blob : blob;
+  Text : text;
+  Array : vec Value;
+};
 type VoteIcpNeuronArgs = record {
   vote : IcpNeuronVote;
   proposal_id : nat64;
   identifier : IcpNeuronIdentifier;
+};
+type VoteSnsNeuronArgs = record {
+  vote : IcpNeuronVote;
+  proposal_id : nat64;
+  neuron_id : blob;
 };
 type VotingPowerEconomics = record {
   start_reducing_voting_power_after_seconds : opt nat64;
@@ -707,6 +716,7 @@ service : (Config) -> {
   icrc10_supported_standards : () -> (vec SupportedStandard) query;
   icrc28_trusted_origins : () -> (Icrc28TrustedOriginsResponse) query;
   icts_description : () -> (text) query;
+  icts_metadata : () -> (vec record { text; Value }) query;
   icts_name : () -> (text) query;
   icts_version : () -> (text) query;
   test_tk_service_manage_neuron : (NeuronType) -> (Result_4);

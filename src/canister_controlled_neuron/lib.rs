@@ -14,6 +14,7 @@ use ic_cdk::query;
 #[query]
 pub fn __get_candid_interface_tmp_hack() -> String {
     use crate::api::icp_governance_api::Neuron as GovNeuron;
+    use crate::api::sns_ledger_api::Value;
     use crate::types::args::icp_neuron_args::IcpNeuronIdentifier;
     use crate::types::config::Config;
     use crate::types::icp_neuron_reference::IcpNeuronReferenceResponse;
