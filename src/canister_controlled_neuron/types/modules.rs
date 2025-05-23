@@ -1,3 +1,5 @@
+#![allow(clippy::large_enum_variant)]
+
 use candid::CandidType;
 use serde::{Deserialize, Serialize};
 
@@ -30,7 +32,7 @@ pub enum IcpNeuronArgs {
     SetDissolveState(SetDissolveStateArgs),
     AutoStake(AutoStakeArgs),
     Spawn(SpawnArgs),
-    CreateProposal(Box<CreateProposalArgs>),
+    CreateProposal(CreateProposalArgs),
     Vote(VoteArgs),
     Disburse(DisburseArgs),
     SetFollowing(SetFollowingArgs),
