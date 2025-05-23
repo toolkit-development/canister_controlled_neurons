@@ -15,8 +15,11 @@ pocket-ic ={ workspace = true}
 serde = {workspace = true}
 toolkit-utils = { workspace = true}
 ic-management-canister-types = {workspace = true}
+ic-ledger-types = {workspace = true}
+icrc-ledger-types = {workspace = true}
 rand = "0.9.1"
 lazy_static = "1.4.0"
+sha2 = "0.10.8"
 canister_controlled_neuron = {path = "../canister_controlled_neuron"}
 
 

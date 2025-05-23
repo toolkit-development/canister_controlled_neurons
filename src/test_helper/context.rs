@@ -1,7 +1,9 @@
 use std::{env, path::PathBuf};
 
+use crate::declarations::icp_governance_api::{
+    ManageNeuronRequest, ManageNeuronResponse, NeuronId, ProposalInfo,
+};
 use candid::{encode_args, CandidType, Decode, Nat, Principal};
-use canister_controlled_neuron::api::icp_governance_api::ProposalInfo;
 use canister_controlled_neuron::types::config::Config;
 
 use ic_management_canister_types::CanisterSettings;
@@ -15,7 +17,9 @@ use toolkit_utils::icrc_ledger_types::icrc1::transfer::TransferArg;
 use toolkit_utils::icrc_ledger_types::icrc2::allowance::{Allowance, AllowanceArgs};
 use toolkit_utils::icrc_ledger_types::icrc2::approve::ApproveArgs;
 
+use crate::declarations::icp_governance_api::ManageNeuronCommandRequest;
 use crate::sender::Sender;
+use crate::sns_context::SnsContext;
 use crate::utils::generate_principal;
 
 pub static OWNER_PRINCIPAL: &str =
@@ -26,16 +30,17 @@ pub struct Context {
     pub owner_account: Account,
     pub neuron_controller_canister: Principal,
     pub config: Config,
+    pub sns: Option<SnsContext>,
 }
 
 impl Default for Context {
     fn default() -> Self {
-        Self::new()
+        Self::new(false)
     }
 }
 
 impl Context {
-    pub fn new() -> Self {
+    pub fn new(with_sns: bool) -> Self {
         let owner_account = Account::from(Principal::from_text(OWNER_PRINCIPAL).unwrap());
 
         let default_install_settings: Option<CanisterSettings> = Some(CanisterSettings {
@@ -64,10 +69,9 @@ impl Context {
             .join("test_helper/nns_state");
 
         let pic = PocketIcBuilder::new()
-            .with_nns_subnet()
             .with_nns_state(nns_state_path)
-            .with_sns_subnet()
             .with_application_subnet()
+            .with_sns_subnet()
             .build();
 
         let canister_controlled_neuron_canister =
@@ -90,14 +94,19 @@ impl Context {
             Some(owner_account.owner),
         );
 
-        let context = Context {
+        let mut context = Context {
             pic,
             owner_account,
             neuron_controller_canister: canister_controlled_neuron_canister,
             config,
+            sns: None,
         };
 
         context.mint_icp(100_000_000_000_100_000, owner_account.owner);
+        if with_sns {
+            context.sns = Some(SnsContext::new(&context));
+        }
+
         context
     }
 
@@ -184,7 +193,7 @@ impl Context {
             .expect("Failed to call canister");
     }
 
-    pub fn get_proposal(
+    pub fn get_icp_proposal(
         &self,
         proposal_id: u64,
         sender: Sender,
@@ -201,6 +210,45 @@ impl Context {
             Err(e) => Err(e.to_string()),
         }
     }
+
+    pub fn nns_command(
+        &self,
+        neuron_id: Option<NeuronId>,
+        command: ManageNeuronCommandRequest,
+        sender: Sender,
+    ) -> Result<ManageNeuronResponse, String> {
+        let manage_neuron_args = ManageNeuronRequest {
+            id: neuron_id,
+            command: Some(command),
+            neuron_id_or_subaccount: None,
+        };
+
+        let res = self.pic.update_call(
+            MAINNET_GOVERNANCE_CANISTER_ID,
+            sender.principal(),
+            "manage_neuron",
+            encode_args((manage_neuron_args,)).unwrap(),
+        );
+
+        match res {
+            Ok(res) => Decode!(res.as_slice(), ManageNeuronResponse).map_err(|e| e.to_string()),
+            Err(e) => Err(e.to_string()),
+        }
+    }
+
+    // pub fn vote(&self, vote: RegisterVote, sender: Sender) -> Result<Option<ProposalInfo>, String> {
+    //     let res = self.pic.query_call(
+    //         MAINNET_GOVERNANCE_CANISTER_ID,
+    //         sender.principal(),
+    //         "vote",
+    //         encode_args((proposal_id,)).unwrap(),
+    //     );
+
+    //     match res {
+    //         Ok(res) => Decode!(res.as_slice(), Option<ProposalInfo>).map_err(|e| e.to_string()),
+    //         Err(e) => Err(e.to_string()),
+    //     }
+    // }
 
     pub fn mint_icp_subaccount(
         &self,

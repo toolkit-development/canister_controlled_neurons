@@ -18,7 +18,7 @@ use toolkit_utils::{icrc_ledger_types::icrc1::account::Account, result::Canister
 
 #[test]
 fn test_get_config() -> Result<(), String> {
-    let context = Context::new();
+    let context = Context::default();
     // fetch the config
     let config_result =
         context.query::<CanisterResult<Config>>(Sender::Owner, "get_config", None)?;
@@ -31,7 +31,7 @@ fn test_get_config() -> Result<(), String> {
 
 #[test]
 fn test_create_neuron_blanco() -> Result<(), String> {
-    let context = Context::new();
+    let context = Context::default();
 
     context.transfer_icp(
         10_000_000_000,
@@ -97,7 +97,7 @@ fn test_create_neuron_blanco() -> Result<(), String> {
 
 #[test]
 fn test_create_neuron_with_dissolve_delay() -> Result<(), String> {
-    let context = Context::new();
+    let context = Context::default();
 
     context.transfer_icp(
         10_000_000_000,
@@ -163,7 +163,7 @@ fn test_create_neuron_with_dissolve_delay() -> Result<(), String> {
 
 #[test]
 fn test_create_neuron_with_auto_stake() -> Result<(), String> {
-    let context = Context::new();
+    let context = Context::default();
 
     context.transfer_icp(
         10_000_000_000,
@@ -229,7 +229,7 @@ fn test_create_neuron_with_auto_stake() -> Result<(), String> {
 
 #[test]
 fn test_create_proposal() -> Result<(), String> {
-    let context = Context::new();
+    let context = Context::default();
     context.transfer_icp(
         10_000_010_000,
         Account {
@@ -286,13 +286,13 @@ fn test_create_proposal() -> Result<(), String> {
         Some(encode_args((args,)).unwrap()),
     )?;
 
-    let proposal = context.get_proposal(2, Sender::Owner);
+    let proposal = context.get_icp_proposal(2, Sender::Owner);
     assert!(proposal.is_ok());
 
     context.pic.advance_time(Duration::from_secs(400000));
     context.pic.tick();
 
-    let proposal = context.get_proposal(2, Sender::Owner);
+    let proposal = context.get_icp_proposal(2, Sender::Owner);
     assert!(proposal.is_ok());
 
     context.pic.advance_time(Duration::from_secs(500000));
@@ -314,7 +314,7 @@ fn test_create_proposal() -> Result<(), String> {
 
 #[test]
 fn test_spawn_neuron_manual_disburse() -> Result<(), String> {
-    let context = Context::new();
+    let context = Context::default();
 
     let config_result =
         context.query::<CanisterResult<Config>>(Sender::Owner, "get_config", None)?;
@@ -390,13 +390,13 @@ fn test_spawn_neuron_manual_disburse() -> Result<(), String> {
         Some(encode_args((args,)).unwrap()),
     )?;
 
-    let proposal = context.get_proposal(2, Sender::Owner);
+    let proposal = context.get_icp_proposal(2, Sender::Owner);
     assert!(proposal.is_ok());
 
     context.pic.advance_time(Duration::from_secs(400000));
     context.pic.tick();
 
-    let proposal = context.get_proposal(2, Sender::Owner);
+    let proposal = context.get_icp_proposal(2, Sender::Owner);
     assert!(proposal.is_ok());
 
     context.pic.advance_time(Duration::from_secs(500000));
