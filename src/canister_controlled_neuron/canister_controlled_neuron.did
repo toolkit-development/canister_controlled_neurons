@@ -140,11 +140,6 @@ type CreateServiceNervousSystem = record {
   swap_parameters : opt SwapParameters;
   initial_token_distribution : opt InitialTokenDistribution;
 };
-type CreateSnsNeuronArgs = record {
-  dissolve_delay : opt nat64;
-  amount_e8s : nat64;
-  auto_stake : opt bool;
-};
 type CreateSnsNeuronProposalArgs = record {
   proposal : Proposal;
   neuron_id : blob;
@@ -203,6 +198,7 @@ type GenericNervousSystemFunction = record {
   validator_method_name : opt text;
   target_method_name : opt text;
 };
+type GetProposal = record { proposal_id : opt NeuronId };
 type GlobalTimeOfDay = record { seconds_after_utc_midnight : opt nat64 };
 type GovernanceError = record { error_message : text; error_type : int32 };
 type GovernanceParameters = record {
@@ -343,6 +339,7 @@ type MintSnsTokens = record {
 };
 type ModuleResponse = variant {
   IcpNeuron : IcpNeuronReferenceResponse;
+  GetProposalResponse : GetProposal;
   SnsNeuron : SnsNeuronReferenceResponse;
   Boolean : bool;
   MakeProposalResponse : MakeProposalResponse;
@@ -555,7 +552,7 @@ type SnsNeuronArgs = variant {
   SetDissolveState : SpawnSnsNeuronArgs;
   TopUp : TopUpSnsNeuronArgs;
   CreateProposal : CreateSnsNeuronProposalArgs;
-  Create : CreateSnsNeuronArgs;
+  Create : CreateIcpNeuronArgs;
   SetFollowing : SetSnsNeuronFollowingArgs;
   Disburse : DisburseSnsNeuronArgs;
 };

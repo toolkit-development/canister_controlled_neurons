@@ -1,4 +1,4 @@
-use candid::{encode_args, Decode, Principal};
+use candid::{encode_args, Decode, Nat, Principal};
 use ic_ledger_types::Subaccount;
 use pocket_ic::PocketIc;
 use toolkit_utils::ic_ledger_types::MAINNET_GOVERNANCE_CANISTER_ID;
@@ -13,8 +13,9 @@ use crate::declarations::icp_governance_api::{
     Result2, SwapDistribution, SwapParameters, Tokens, VotingRewardParameters,
 };
 use crate::declarations::sns_governance_api::{
-    Command, GetProposal, GetProposalResponse, ListNeurons, ListNeuronsResponse, ManageNeuron,
-    ManageNeuronResponse, Neuron as SnsNeuron, NeuronId as SnsNeuronId, ProposalId,
+    Command, GetNeuron, GetNeuronResponse, GetProposal, GetProposalResponse, ListNeurons,
+    ListNeuronsResponse, ManageNeuron, ManageNeuronResponse, Neuron as SnsNeuron,
+    NeuronId as SnsNeuronId, ProposalId, RegisterVote,
 };
 use crate::declarations::snsw_api::{
     DeployedSns, GetDeployedSnsByProposalIdRequest, GetDeployedSnsByProposalIdResponse,
@@ -22,9 +23,9 @@ use crate::declarations::snsw_api::{
     UpdateSnsSubnetListRequest, UpdateSnsSubnetListResponse,
 };
 use crate::declarations::swap_api::{
-    GetBuyerStateRequest, GetBuyerStateResponse, GetLifecycleArg, GetLifecycleResponse,
-    NewSaleTicketRequest, NewSaleTicketResponse, RefreshBuyerTokensRequest,
-    RefreshBuyerTokensResponse,
+    FinalizeSwapArg, FinalizeSwapResponse, GetBuyerStateRequest, GetBuyerStateResponse,
+    GetLifecycleArg, GetLifecycleResponse, NewSaleTicketRequest, NewSaleTicketResponse,
+    RefreshBuyerTokensRequest, RefreshBuyerTokensResponse,
 };
 use crate::sender::Sender;
 use crate::utils::generate_principal;
@@ -32,11 +33,12 @@ use crate::{context::Context, declarations::icp_governance_api::ManageNeuronComm
 use sha2::{Digest, Sha256};
 
 pub static SNSW_CANISTER_ID: &str = "qaa6y-5yaaa-aaaaa-aaafa-cai";
-pub static DEVELOPER_ICP: u64 = 100_000_000_000;
+pub static DEVELOPER_ICP: u64 = 100_000_000_000_000;
 pub static PARTICIPANT_ICP: u64 = 100_000_000_000;
 pub struct SnsContext {
     pub icp_neuron_id: Option<IcpNeuronId>,
     pub sns_neurons: Vec<SnsNeuron>,
+    pub developer_neuron_id: Option<SnsNeuronId>,
     pub sns_canisters: DeployedSns,
     pub participants: Vec<Principal>,
 }
@@ -63,12 +65,51 @@ impl SnsContext {
         let sns_neurons = Self::get_sns_neurons(context, deployed_sns.clone())
             .expect("Failed to get sns neuron id");
 
+        // the biggest neuron is the developer neuron
+        let developer_neuron_id = sns_neurons
+            .neurons
+            .iter()
+            .max_by_key(|n| n.cached_neuron_stake_e8s)
+            .map(|n| n.id.clone().unwrap());
+
+        let neurons_without_developer = sns_neurons
+            .neurons
+            .into_iter()
+            .filter(|n| n.id.clone().unwrap().id != developer_neuron_id.clone().unwrap().id)
+            .collect::<Vec<_>>();
+
         SnsContext {
             icp_neuron_id,
             sns_canisters: deployed_sns,
             participants: vec![],
-            sns_neurons: sns_neurons.neurons,
+            sns_neurons: neurons_without_developer,
+            developer_neuron_id,
         }
+    }
+
+    pub fn get_sns_neuron(
+        &self,
+        pic: &PocketIc,
+        neuron_id: SnsNeuronId,
+    ) -> Result<GetNeuronResponse, String> {
+        let args = GetNeuron {
+            neuron_id: Some(SnsNeuronId { id: neuron_id.id }),
+        };
+
+        let res = pic
+            .query_call(
+                self.sns_canisters.governance_canister_id.unwrap(),
+                Principal::anonymous(),
+                "get_neuron",
+                encode_args((args,)).unwrap(),
+            )
+            .expect("Failed to call canister");
+
+        let res = Decode!(res.as_slice(), GetNeuronResponse)
+            .map_err(|e| e.to_string())
+            .expect("Failed to decode neuron");
+
+        Ok(res)
     }
 
     pub fn get_sns_proposal(
@@ -113,6 +154,52 @@ impl SnsContext {
 
         match res {
             Ok(res) => Decode!(res.as_slice(), ManageNeuronResponse).map_err(|e| e.to_string()),
+            Err(e) => Err(e.to_string()),
+        }
+    }
+
+    pub fn vote_with_neurons(
+        &self,
+        pic: &PocketIc,
+        proposal_id: Option<ProposalId>,
+        neuron_ids: Vec<SnsNeuronId>,
+        vote: i32,
+    ) -> Result<Vec<ManageNeuronResponse>, String> {
+        let vote_args = RegisterVote {
+            proposal: proposal_id,
+            vote,
+        };
+
+        let mut responses: Vec<ManageNeuronResponse> = vec![];
+
+        for neuron_id in neuron_ids {
+            let response = self.sns_command(
+                pic,
+                neuron_id,
+                Command::RegisterVote(vote_args.clone()),
+                Sender::Owner,
+            )?;
+
+            responses.push(response);
+        }
+
+        Ok(responses)
+    }
+
+    pub fn get_balance(&self, pic: &PocketIc, account: Account) -> Result<Nat, String> {
+        let result = pic
+            .query_call(
+                self.sns_canisters.ledger_canister_id.unwrap(),
+                Principal::anonymous(),
+                "icrc1_balance_of",
+                encode_args((account,)).unwrap(),
+            )
+            .expect("Failed to call canister");
+
+        let result = Decode!(result.as_slice(), Nat).map_err(|e| e.to_string());
+
+        match result {
+            Ok(result) => Ok(result),
             Err(e) => Err(e.to_string()),
         }
     }
@@ -379,13 +466,13 @@ impl SnsContext {
             } else {
                 generate_principal()
             };
-            context.mint_icp(PARTICIPANT_ICP + 10_000, participant);
+            context.mint_icp(PARTICIPANT_ICP + 10_000 + 10_000, participant);
 
             context.pic.tick();
 
             let subaccount = Subaccount::from(participant);
             let args = NewSaleTicketRequest {
-                amount_icp_e8s: PARTICIPANT_ICP - 10_000,
+                amount_icp_e8s: PARTICIPANT_ICP,
                 subaccount: Some(subaccount.0.to_vec()),
             };
 
@@ -407,7 +494,7 @@ impl SnsContext {
             println!("--------------------------------");
 
             context.transfer_icp(
-                PARTICIPANT_ICP,
+                PARTICIPANT_ICP + 10_000,
                 Account {
                     owner: participant,
                     subaccount: None,
@@ -418,6 +505,8 @@ impl SnsContext {
                 },
             );
 
+            context.pic.tick();
+
             let balance = context.get_icp_balance_with_subaccount(
                 deployed_sns.swap_canister_id.unwrap(),
                 subaccount.0,
@@ -425,7 +514,9 @@ impl SnsContext {
             println!("balance: {:?}", balance);
             println!("--------------------------------");
             assert!(balance.is_ok());
-            assert!(balance.unwrap() == PARTICIPANT_ICP);
+            assert!(balance.unwrap() == PARTICIPANT_ICP + 10_000);
+
+            context.pic.tick();
 
             let args = RefreshBuyerTokensRequest {
                 confirmation_text: None,
@@ -449,6 +540,8 @@ impl SnsContext {
             println!("refresh_result: {:?}", refresh_result);
             println!("--------------------------------");
 
+            context.pic.tick();
+
             let args = GetBuyerStateRequest {
                 principal_id: Some(participant),
             };
@@ -466,15 +559,15 @@ impl SnsContext {
             let get_buyer_state_result = Decode!(get_buyer_state.as_slice(), GetBuyerStateResponse)
                 .map_err(|e| e.to_string())
                 .expect("Failed to decode get buyer state");
-
             println!("get_buyer_state_result: {:?}", get_buyer_state_result);
             println!("--------------------------------");
         }
     }
 
+    // could be improved with https://github.com/dfinity/ic/blob/1b05fbe93d6cc035bdd48ee86a9a3a70406af7e1/rs/nervous_system/integration_tests/src/pocket_ic_helpers.rs#L2833
+    // https://github.com/dfinity/ic/blob/1b05fbe93d6cc035bdd48ee86a9a3a70406af7e1/rs/nervous_system/integration_tests/src/pocket_ic_helpers.rs#L2743
     fn finalize_sns_sale(context: &Context, deployed_sns: DeployedSns) {
         Self::get_start_function_print("finalize_sns_sale");
-
         let mut lifecycle: i32 = 0;
 
         let args = GetLifecycleArg {};
@@ -506,6 +599,26 @@ impl SnsContext {
 
         println!("lifecycle: {:?}", lifecycle);
         println!("--------------------------------");
+
+        let args = FinalizeSwapArg {};
+
+        let finalize_swap = context
+            .pic
+            .update_call(
+                deployed_sns.swap_canister_id.unwrap(),
+                context.owner_account.owner,
+                "finalize_swap",
+                encode_args((&args,)).unwrap(),
+            )
+            .expect("Failed to call canister");
+
+        let finalize_swap_result = Decode!(finalize_swap.as_slice(), FinalizeSwapResponse)
+            .map_err(|e| e.to_string())
+            .expect("Failed to decode finalize swap");
+
+        println!("finalize_swap_result: {:?}", finalize_swap_result);
+        println!("--------------------------------");
+
         Self::get_end_function_print();
     }
 
@@ -522,7 +635,7 @@ impl SnsContext {
             .pic
             .query_call(
                 deployed_sns.governance_canister_id.unwrap(),
-                context.owner_account.owner,
+                Principal::anonymous(),
                 "list_neurons",
                 encode_args((args,)).unwrap(),
             )

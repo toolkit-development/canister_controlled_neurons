@@ -70,42 +70,59 @@ impl Context {
 
         let pic = PocketIcBuilder::new()
             .with_nns_state(nns_state_path)
-            .with_application_subnet()
             .with_sns_subnet()
+            .with_application_subnet()
             .build();
 
-        let canister_controlled_neuron_canister =
-            pic.create_canister_with_settings(None, default_install_settings.clone());
+        let canister_controlled_neuron_canister = pic.create_canister_on_subnet(
+            None,
+            default_install_settings.clone(),
+            pic.topology().get_app_subnets()[0],
+        );
 
         pic.add_cycles(canister_controlled_neuron_canister, 2_000_000_000_000);
 
         let canister_controlled_neuron_wasm_bytes =
             include_bytes!("../../wasm/canister_controlled_neuron.wasm.gz");
 
-        let config = Config {
-            governance_canister_id: generate_principal(),
-            sns_ledger_canister_id: generate_principal(),
-        };
-
-        pic.install_canister(
-            canister_controlled_neuron_canister,
-            canister_controlled_neuron_wasm_bytes.to_vec(),
-            encode_args((config.clone(),)).unwrap(),
-            Some(owner_account.owner),
-        );
-
         let mut context = Context {
             pic,
             owner_account,
             neuron_controller_canister: canister_controlled_neuron_canister,
-            config,
+            config: Config {
+                governance_canister_id: generate_principal(),
+                sns_ledger_canister_id: generate_principal(),
+            },
             sns: None,
         };
-
-        context.mint_icp(100_000_000_000_100_000, owner_account.owner);
         if with_sns {
             context.sns = Some(SnsContext::new(&context));
+            context.config = Config {
+                governance_canister_id: context
+                    .sns
+                    .as_ref()
+                    .unwrap()
+                    .sns_canisters
+                    .governance_canister_id
+                    .unwrap(),
+                sns_ledger_canister_id: context
+                    .sns
+                    .as_ref()
+                    .unwrap()
+                    .sns_canisters
+                    .ledger_canister_id
+                    .unwrap(),
+            };
         }
+
+        context.pic.install_canister(
+            canister_controlled_neuron_canister,
+            canister_controlled_neuron_wasm_bytes.to_vec(),
+            encode_args((context.config.clone(),)).unwrap(),
+            Some(owner_account.owner),
+        );
+
+        context.mint_icp(100_000_000_000_100_000, owner_account.owner);
 
         context
     }

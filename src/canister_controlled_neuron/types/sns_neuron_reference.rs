@@ -11,7 +11,8 @@ use crate::{
         api_clients::ApiClients,
         sns_governance_api::{
             By, ChangeAutoStakeMaturity, ClaimOrRefresh, ClaimOrRefreshResponse, Command, Command1,
-            Configure, IncreaseDissolveDelay, ManageNeuron, MemoAndController, Operation,
+            Configure, GetProposal, IncreaseDissolveDelay, ManageNeuron, MemoAndController,
+            Operation, Proposal,
         },
         sns_ledger_api::{Account, Result_, TransferArg},
     },
@@ -233,6 +234,15 @@ impl SnsNeuronReference {
             .await?;
         match result {
             Command1::Configure {} => Ok(()),
+            _ => Err(ApiError::external_service_error("Unexpected response")),
+        }
+    }
+
+    pub async fn create_proposal(&self, proposal: Proposal) -> CanisterResult<GetProposal> {
+        let result = self.command(Command::MakeProposal(proposal)).await?;
+        match result {
+            Command1::MakeProposal(response) => Ok(response),
+            Command1::Error(e) => Err(ApiError::external_service_error(e.error_message.as_str())),
             _ => Err(ApiError::external_service_error("Unexpected response")),
         }
     }

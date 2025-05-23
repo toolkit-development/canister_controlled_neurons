@@ -22,7 +22,7 @@ pub enum SnsNeuronArgs {
 pub struct CreateSnsNeuronArgs {
     pub amount_e8s: u64,
     pub auto_stake: Option<bool>,
-    pub dissolve_delay: Option<u64>,
+    pub dissolve_delay_seconds: Option<u64>,
 }
 
 #[derive(Debug, CandidType, Serialize, Deserialize, Clone)]

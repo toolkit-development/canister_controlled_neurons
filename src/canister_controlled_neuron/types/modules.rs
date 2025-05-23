@@ -1,7 +1,10 @@
 use candid::CandidType;
 use serde::{Deserialize, Serialize};
 
-use crate::api::icp_governance_api::{MakeProposalResponse, ManageNeuronResponse};
+use crate::api::{
+    icp_governance_api::{MakeProposalResponse, ManageNeuronResponse},
+    sns_governance_api::GetProposal,
+};
 
 use super::{
     args::{icp_neuron_args::IcpNeuronArgs, sns_neuron_args::SnsNeuronArgs},
@@ -24,4 +27,5 @@ pub enum ModuleResponse {
     BlockHeight(u64),
     ManageNeuronResponse(Box<ManageNeuronResponse>),
     MakeProposalResponse(Box<MakeProposalResponse>),
+    GetProposalResponse(Box<GetProposal>),
 }

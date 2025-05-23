@@ -5,6 +5,7 @@ use toolkit_utils::{
 };
 
 use crate::{
+    api::sns_governance_api::{GetProposal, Proposal},
     storage::{
         icp_neuron_reference_storage::IcpNeuronReferenceStore, log_storage::LogStore,
         sns_neuron_reference_storage::SnsNeuronReferenceStore,
@@ -187,17 +188,17 @@ impl SNSNeuronLogic {
     //     Ok(true)
     // }
 
-    // pub async fn create_proposal(
-    //     identifier: &IcpNeuronIdentifier,
-    //     proposal: MakeProposalRequest,
-    // ) -> CanisterResult<MakeProposalResponse> {
-    //     let (_, neuron) = IcpNeuronReferenceStore::get_by_identifier(identifier)?;
-    //     let result = neuron.create_proposal(proposal).await.map_err(|e| {
-    //         let _ = LogStore::insert(format!("{}: Error creating proposal: {}", time(), e));
-    //         e
-    //     })?;
-    //     Ok(result)
-    // }
+    pub async fn create_proposal(
+        neuron_id: Vec<u8>,
+        proposal: Proposal,
+    ) -> CanisterResult<GetProposal> {
+        let (_, neuron) = SnsNeuronReferenceStore::get_by_id(neuron_id)?;
+        let result = neuron.create_proposal(proposal).await.map_err(|e| {
+            let _ = LogStore::insert(format!("{}: Error creating proposal: {}", time(), e));
+            e
+        })?;
+        Ok(result)
+    }
 
     // pub async fn vote(
     //     identifier: &IcpNeuronIdentifier,
@@ -272,7 +273,7 @@ impl SNSNeuronLogic {
                 let result = SNSNeuronLogic::create_neuron(
                     args.amount_e8s,
                     args.auto_stake,
-                    args.dissolve_delay,
+                    args.dissolve_delay_seconds,
                 )
                 .await?;
                 Ok(ModuleResponse::SnsNeuron(Box::new(result)))
@@ -310,7 +311,14 @@ impl SNSNeuronLogic {
                 Ok(ModuleResponse::Boolean(result))
             }
             SnsNeuronArgs::Spawn(_) => Ok(ModuleResponse::Boolean(true)),
-            SnsNeuronArgs::CreateProposal(_) => Ok(ModuleResponse::Boolean(true)),
+            SnsNeuronArgs::CreateProposal(create_proposal_args) => {
+                let result = SNSNeuronLogic::create_proposal(
+                    create_proposal_args.neuron_id,
+                    create_proposal_args.proposal,
+                )
+                .await?;
+                Ok(ModuleResponse::GetProposalResponse(Box::new(result)))
+            }
             SnsNeuronArgs::Vote(_) => Ok(ModuleResponse::Boolean(true)),
             SnsNeuronArgs::Disburse(_) => Ok(ModuleResponse::Boolean(true)),
             SnsNeuronArgs::SetFollowing(_) => Ok(ModuleResponse::Boolean(true)),
