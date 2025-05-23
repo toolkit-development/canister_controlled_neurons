@@ -1,0 +1,44 @@
+name: Release
+description: Create a GitHub release with the WASM file
+
+inputs:
+  wasm_file:
+    description: Path to the wasm file to release
+    required: true
+  github_token:
+    description: GitHub token for creating releases
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Get version from Cargo.toml
+      shell: bash
+      id: get_version
+      run: |
+        VERSION=$(grep '^version = ' Cargo.toml | cut -d '"' -f2)
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+    - name: Check CHANGELOG.md
+      shell: bash
+      run: |
+        VERSION="${{ steps.get_version.outputs.version }}"
+        if ! grep -q "## \[$VERSION\]" CHANGELOG.md; then
+          echo "Error: CHANGELOG.md does not contain an entry for version $VERSION"
+          exit 1
+        fi
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: ${{ inputs.wasm_file }}
+        tag_name: v${{ steps.get_version.outputs.version }}
+        name: Release v${{ steps.get_version.outputs.version }}
+        body: |
+          Release v${{ steps.get_version.outputs.version }}
+          
+          See CHANGELOG.md for details.
+        token: ${{ inputs.github_token }}

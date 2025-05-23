@@ -1,3 +1,5 @@
+#![allow(clippy::large_enum_variant)]
+
 use candid::CandidType;
 use serde::{Deserialize, Serialize};
 
