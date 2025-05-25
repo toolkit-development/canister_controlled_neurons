@@ -162,8 +162,9 @@ impl SnsContext {
         &self,
         pic: &PocketIc,
         proposal_id: Option<ProposalId>,
-        neuron_ids: Vec<SnsNeuronId>,
+        mut neuron_ids: Vec<SnsNeuronId>,
         vote: i32,
+        include_developer: bool,
     ) -> Result<Vec<ManageNeuronResponse>, String> {
         let vote_args = RegisterVote {
             proposal: proposal_id,
@@ -171,6 +172,10 @@ impl SnsContext {
         };
 
         let mut responses: Vec<ManageNeuronResponse> = vec![];
+
+        if include_developer {
+            neuron_ids.push(self.developer_neuron_id.clone().unwrap());
+        }
 
         for neuron_id in neuron_ids {
             let response = self.sns_command(

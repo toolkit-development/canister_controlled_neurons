@@ -8,11 +8,13 @@ use crate::{
     api::sns_governance_api::{GetProposal, Proposal},
     storage::{
         icp_neuron_reference_storage::IcpNeuronReferenceStore, log_storage::LogStore,
+        sns_chain_proposals_storage::SnsChainProposalsStore,
         sns_neuron_reference_storage::SnsNeuronReferenceStore,
     },
     types::{
         args::sns_neuron_args::SnsNeuronArgs,
         modules::ModuleResponse,
+        sns_chain_proposals::{PostSnsChainProposal, SnsChainProposals, SnsChainProposalsResponse},
         sns_neuron_reference::{SnsNeuronReference, SnsNeuronReferenceResponse},
     },
 };
@@ -105,6 +107,43 @@ impl SNSNeuronLogic {
         })?;
 
         Ok(true)
+    }
+
+    pub async fn create_chain_proposals(
+        neuron_id: Vec<u8>,
+        proposals: Vec<PostSnsChainProposal>,
+        start_chain: bool,
+    ) -> CanisterResult<SnsChainProposalsResponse> {
+        let mut chain = SnsChainProposals::new(neuron_id, proposals);
+
+        if start_chain {
+            chain.start_chain().await?;
+        }
+
+        let (id, _) = SnsChainProposalsStore::insert(chain.clone())?;
+
+        Ok(chain.to_response(id))
+    }
+
+    pub async fn get_sns_chain_proposals(id: u64) -> CanisterResult<SnsChainProposalsResponse> {
+        let (_, chain) = SnsChainProposalsStore::get(id)?;
+        Ok(chain.to_response(id))
+    }
+
+    pub async fn start_chain(id: u64) -> CanisterResult<SnsChainProposalsResponse> {
+        let (_, mut chain) = SnsChainProposalsStore::get(id)?;
+        chain.start_chain().await?;
+        SnsChainProposalsStore::update(id, chain.clone())?;
+        Ok(chain.to_response(id))
+    }
+
+    pub async fn execute_next_proposal(id: u64) -> CanisterResult<SnsChainProposalsResponse> {
+        let (_, mut chain) = SnsChainProposalsStore::get(id)?;
+
+        chain.execute_next_proposal().await?;
+
+        SnsChainProposalsStore::update(id, chain.clone())?;
+        Ok(chain.to_response(id))
     }
 
     pub async fn add_dissolve_delay(

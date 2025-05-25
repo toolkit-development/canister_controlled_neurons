@@ -7,12 +7,13 @@ use toolkit_utils::{
 
 use crate::types::{
     config::Config, icp_neuron_reference::IcpNeuronReference,
-    sns_neuron_reference::SnsNeuronReference,
+    sns_chain_proposals::SnsChainProposals, sns_neuron_reference::SnsNeuronReference,
 };
 
 pub static CONFIG_MEMORY_ID: MemoryId = MemoryId::new(0);
 pub static ICP_NEURON_REFERENCES_MEMORY_ID: MemoryId = MemoryId::new(1);
 pub static SNS_NEURON_REFERENCES_MEMORY_ID: MemoryId = MemoryId::new(2);
+pub static SNS_CHAIN_PROPOSALS_MEMORY_ID: MemoryId = MemoryId::new(3);
 
 pub static LOG_MEMORY_ID: MemoryId = MemoryId::new(254);
 
@@ -23,5 +24,7 @@ thread_local! {
         init_btree(&MEMORY_MANAGER, ICP_NEURON_REFERENCES_MEMORY_ID);
     pub static SNS_NEURON_REFERENCES: StorageRef<u64, SnsNeuronReference> =
         init_btree(&MEMORY_MANAGER, SNS_NEURON_REFERENCES_MEMORY_ID);
+    pub static SNS_CHAIN_PROPOSALS: StorageRef<u64, SnsChainProposals> =
+        init_btree(&MEMORY_MANAGER, SNS_CHAIN_PROPOSALS_MEMORY_ID);
     pub static LOG: StorageRef<u64, String> = init_btree(&MEMORY_MANAGER, LOG_MEMORY_ID);
 }
