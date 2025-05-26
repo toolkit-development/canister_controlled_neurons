@@ -64,6 +64,15 @@ impl SnsChainProposals {
     }
 
     pub async fn execute_next_proposal(&mut self) -> CanisterResult<SnsChainProposal> {
+        let previous_proposal = self
+            .proposals
+            .get_mut(&(self.current_index - 1))
+            .ok_or(ApiError::not_found("Proposal not found"))?;
+
+        if !previous_proposal.is_proposal_executed().await? {
+            return Err(ApiError::bad_request("Previous proposal not executed"));
+        }
+
         let current_proposal = self
             .proposals
             .get_mut(&self.current_index)

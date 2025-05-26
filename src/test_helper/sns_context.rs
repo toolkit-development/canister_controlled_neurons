@@ -1,8 +1,14 @@
 use candid::{encode_args, Decode, Nat, Principal};
+use canister_controlled_neuron::types::args::sns_neuron_args::{
+    CreateSnsNeuronArgs, SnsNeuronArgs,
+};
+use canister_controlled_neuron::types::modules::{ModuleResponse, NeuronType};
+use canister_controlled_neuron::types::sns_neuron_reference::SnsNeuronReferenceResponse;
 use ic_ledger_types::Subaccount;
 use pocket_ic::PocketIc;
 use toolkit_utils::ic_ledger_types::MAINNET_GOVERNANCE_CANISTER_ID;
 use toolkit_utils::icrc_ledger_types::icrc1::account::Account;
+use toolkit_utils::result::CanisterResult;
 
 use crate::declarations::icp_governance_api::{
     By, ClaimOrRefresh, ClaimOrRefreshResponse, Command1, Configure, Countries,
@@ -13,9 +19,9 @@ use crate::declarations::icp_governance_api::{
     Result2, SwapDistribution, SwapParameters, Tokens, VotingRewardParameters,
 };
 use crate::declarations::sns_governance_api::{
-    Command, GetNeuron, GetNeuronResponse, GetProposal, GetProposalResponse, ListNeurons,
-    ListNeuronsResponse, ManageNeuron, ManageNeuronResponse, Neuron as SnsNeuron,
-    NeuronId as SnsNeuronId, ProposalId, RegisterVote,
+    Action, Command, GetNeuron, GetNeuronResponse, GetProposal, GetProposalResponse, ListNeurons,
+    ListNeuronsResponse, ManageNeuron, ManageNeuronResponse, MintSnsTokens, Neuron as SnsNeuron,
+    NeuronId as SnsNeuronId, Proposal, ProposalId, RegisterVote,
 };
 use crate::declarations::snsw_api::{
     DeployedSns, GetDeployedSnsByProposalIdRequest, GetDeployedSnsByProposalIdResponse,
@@ -24,7 +30,7 @@ use crate::declarations::snsw_api::{
 };
 use crate::declarations::swap_api::{
     FinalizeSwapArg, FinalizeSwapResponse, GetBuyerStateRequest, GetBuyerStateResponse,
-    GetLifecycleArg, GetLifecycleResponse, NewSaleTicketRequest, NewSaleTicketResponse,
+    GetLifecycleArg, GetLifecycleResponse, NeuronId, NewSaleTicketRequest, NewSaleTicketResponse,
     RefreshBuyerTokensRequest, RefreshBuyerTokensResponse,
 };
 use crate::sender::Sender;
@@ -37,8 +43,9 @@ pub static DEVELOPER_ICP: u64 = 100_000_000_000_000;
 pub static PARTICIPANT_ICP: u64 = 100_000_000_000;
 pub struct SnsContext {
     pub icp_neuron_id: Option<IcpNeuronId>,
-    pub sns_neurons: Vec<SnsNeuron>,
+    pub developer_sns_neurons: Vec<SnsNeuron>,
     pub developer_neuron_id: Option<SnsNeuronId>,
+    pub service_canister_neuron_id: Option<SnsNeuronId>,
     pub sns_canisters: DeployedSns,
     pub participants: Vec<Principal>,
 }
@@ -80,9 +87,10 @@ impl SnsContext {
 
         SnsContext {
             icp_neuron_id,
+            service_canister_neuron_id: None,
             sns_canisters: deployed_sns,
             participants: vec![],
-            sns_neurons: neurons_without_developer,
+            developer_sns_neurons: neurons_without_developer,
             developer_neuron_id,
         }
     }
@@ -162,7 +170,7 @@ impl SnsContext {
         &self,
         pic: &PocketIc,
         proposal_id: Option<ProposalId>,
-        mut neuron_ids: Vec<SnsNeuronId>,
+        neuron_ids: Vec<SnsNeuronId>,
         vote: i32,
         include_developer: bool,
     ) -> Result<Vec<ManageNeuronResponse>, String> {
@@ -174,7 +182,22 @@ impl SnsContext {
         let mut responses: Vec<ManageNeuronResponse> = vec![];
 
         if include_developer {
-            neuron_ids.push(self.developer_neuron_id.clone().unwrap());
+            let response = self.sns_command(
+                pic,
+                self.developer_neuron_id.clone().unwrap(),
+                Command::RegisterVote(vote_args.clone()),
+                Sender::Owner,
+            );
+
+            match response {
+                Ok(response) => {
+                    responses.push(response.clone());
+                    println!("developer_neuron_vote: {:?}", response);
+                }
+                Err(e) => {
+                    println!("developer neuron error: {:?}", e);
+                }
+            }
         }
 
         for neuron_id in neuron_ids {
@@ -183,9 +206,16 @@ impl SnsContext {
                 neuron_id,
                 Command::RegisterVote(vote_args.clone()),
                 Sender::Owner,
-            )?;
-
-            responses.push(response);
+            );
+            match response {
+                Ok(response) => {
+                    responses.push(response.clone());
+                    println!("response: {:?}", response);
+                }
+                Err(e) => {
+                    println!("error: {:?}", e);
+                }
+            }
         }
 
         Ok(responses)
@@ -568,6 +598,85 @@ impl SnsContext {
             println!("--------------------------------");
         }
     }
+
+    // pub fn prepare_sns_state(&mut self, context: &Context) -> Result<(), String> {
+    //     // let sns = self.as_mut().unwrap();
+    //     // mint tokens for the neuron controller canister
+    //     let mint_sns_tokens = self.sns_command(
+    //         &context.pic,
+    //         self.developer_neuron_id.clone().unwrap(),
+    //         Command::MakeProposal(Proposal {
+    //             url: "https://example.com".to_string(),
+    //             title: "Test mint".to_string(),
+    //             summary: "Test mint".to_string(),
+    //             action: Some(Action::MintSnsTokens(MintSnsTokens {
+    //                 to_principal: Some(context.neuron_controller_canister),
+    //                 to_subaccount: None,
+    //                 memo: Some(1),
+    //                 amount_e8s: Some(10_000_000_000),
+    //             })),
+    //         }),
+    //         Sender::Owner,
+    //     )?;
+
+    //     println!("mint_sns_tokens: {:?}", mint_sns_tokens);
+
+    //     // vote for the proposal
+    //     let vote_result = self.vote_with_neurons(
+    //         &context.pic,
+    //         Some(ProposalId { id: 1 }),
+    //         self.developer_sns_neurons
+    //             .iter()
+    //             .map(|n| n.id.clone().unwrap())
+    //             .collect(),
+    //         1,
+    //         false,
+    //     )?;
+    //     println!("vote_result: {:?}", vote_result);
+
+    //     let proposal_id =
+    //         self.get_sns_proposal(&context.pic, Some(ProposalId { id: 1 }), Sender::Owner)?;
+    //     println!("proposal_id: {:?}", proposal_id);
+
+    //     // get the balance of the neuron controller canister
+    //     let balance = self.get_balance(
+    //         &context.pic,
+    //         Account {
+    //             owner: context.neuron_controller_canister,
+    //             subaccount: None,
+    //         },
+    //     )?;
+
+    //     println!("balance: {:?}", balance);
+    //     assert!(balance == 10_000_000_000u64);
+
+    //     let args: NeuronType = NeuronType::Sns(SnsNeuronArgs::Create(CreateSnsNeuronArgs {
+    //         amount_e8s: 1_000_000_000,
+    //         auto_stake: None,
+    //         dissolve_delay_seconds: Some(255_000_000),
+    //     }));
+
+    //     let create_neuron = context.update::<CanisterResult<ModuleResponse>>(
+    //         Sender::Other(context.config.governance_canister_id),
+    //         "tk_service_manage_neuron",
+    //         Some(encode_args((args,)).unwrap()),
+    //     )?;
+
+    //     println!("result: {:?}", create_neuron);
+    //     assert!(create_neuron.is_ok());
+
+    //     let neuron_references = context.query::<CanisterResult<Vec<SnsNeuronReferenceResponse>>>(
+    //         Sender::Other(context.config.governance_canister_id),
+    //         "get_sns_neuron_references",
+    //         None,
+    //     )?;
+
+    //     println!("neuron_reference: {:?}", &neuron_references);
+    //     assert!(neuron_references.is_ok());
+    //     let neuron_id = neuron_references.unwrap()[0].neuron_id.clone().unwrap();
+    //     self.service_canister_neuron_id = Some(SnsNeuronId { id: neuron_id });
+    //     Ok(())
+    // }
 
     // could be improved with https://github.com/dfinity/ic/blob/1b05fbe93d6cc035bdd48ee86a9a3a70406af7e1/rs/nervous_system/integration_tests/src/pocket_ic_helpers.rs#L2833
     // https://github.com/dfinity/ic/blob/1b05fbe93d6cc035bdd48ee86a9a3a70406af7e1/rs/nervous_system/integration_tests/src/pocket_ic_helpers.rs#L2743

@@ -96,7 +96,9 @@ impl Context {
             sns: None,
         };
         if with_sns {
-            context.sns = Some(SnsContext::new(&context));
+            let sns = SnsContext::new(&context);
+            context.sns = Some(sns);
+
             context.config = Config {
                 governance_canister_id: context
                     .sns
