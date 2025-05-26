@@ -32,7 +32,7 @@ use crate::declarations::snsw_api::{
 };
 use crate::declarations::swap_api::{
     FinalizeSwapArg, FinalizeSwapResponse, GetBuyerStateRequest, GetBuyerStateResponse,
-    GetLifecycleArg, GetLifecycleResponse, NeuronId, NewSaleTicketRequest, NewSaleTicketResponse,
+    GetLifecycleArg, GetLifecycleResponse, NewSaleTicketRequest, NewSaleTicketResponse,
     RefreshBuyerTokensRequest, RefreshBuyerTokensResponse,
 };
 use crate::sender::Sender;
@@ -87,16 +87,14 @@ impl SnsContext {
             .filter(|n| n.id.clone().unwrap().id != developer_neuron_id.clone().unwrap().id)
             .collect::<Vec<_>>();
 
-        let mut sns_context = SnsContext {
+        SnsContext {
             icp_neuron_id,
             service_canister_neuron_id: None,
             sns_canisters: deployed_sns,
             participants,
             developer_sns_neurons: neurons_without_developer,
             developer_neuron_id,
-        };
-
-        sns_context
+        }
     }
 
     pub fn get_sns_neuron(
@@ -861,7 +859,7 @@ impl SnsContext {
 
         // vote for the proposal
         let vote_result =
-            self.vote_with_participants_count(&context, 5, Some(ProposalId { id: 1 }), 1, true)?;
+            self.vote_with_participants_count(context, 5, Some(ProposalId { id: 1 }), 1, true)?;
         println!("vote_result: {:?}", vote_result);
 
         let proposal_id =

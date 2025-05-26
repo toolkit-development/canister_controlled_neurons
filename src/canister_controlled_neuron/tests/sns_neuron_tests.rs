@@ -10,16 +10,11 @@ use canister_controlled_neuron::{
 };
 use test_helper::{
     context::Context,
-    declarations::{
-        icp_governance_api::NeuronId,
-        sns_governance_api::{
-            Action as SnsAction, Command, GetProposalResponse, MintSnsTokens as MintSnsTokensTest,
-            Motion as SnsMotion, NeuronId as SnsNeuronId, Proposal as SnsProposal, ProposalId,
-            Result1,
-        },
+    declarations::sns_governance_api::{
+        Action as SnsAction, Command, MintSnsTokens as MintSnsTokensTest, Motion as SnsMotion,
+        NeuronId as SnsNeuronId, Proposal as SnsProposal, ProposalId, Result1,
     },
     sender::Sender,
-    sns_context::SnsContext,
 };
 use toolkit_utils::{icrc_ledger_types::icrc1::account::Account, result::CanisterResult};
 
