@@ -69,7 +69,11 @@ impl SnsChainProposals {
             .get_mut(&(self.current_index - 1))
             .ok_or(ApiError::not_found("Proposal not found"))?;
 
-        if !previous_proposal.is_proposal_executed().await? {
+        if !previous_proposal
+            .is_proposal_executed()
+            .await
+            .unwrap_or(false)
+        {
             return Err(ApiError::bad_request("Previous proposal not executed"));
         }
 
@@ -141,12 +145,10 @@ impl SnsChainProposal {
             "Proposal ID is not set to fetch response",
         ))?;
 
-        if self.proposal_response.is_none() {
-            self.fetch_and_set_proposal_response(proposal_id).await?;
-        }
+        let latest_response = self.fetch_and_set_proposal_response(proposal_id).await?;
 
-        match self.proposal_response {
-            Some(Result1::Proposal(ref proposal)) => Ok(proposal.executed_timestamp_seconds > 0),
+        match latest_response {
+            Result1::Proposal(ref proposal) => Ok(proposal.executed_timestamp_seconds > 0),
             _ => Ok(false),
         }
     }

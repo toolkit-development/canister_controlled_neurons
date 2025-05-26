@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use candid::{encode_args, Decode, Nat, Principal};
 use canister_controlled_neuron::types::args::sns_neuron_args::{
     CreateSnsNeuronArgs, SnsNeuronArgs,
@@ -65,7 +67,7 @@ impl SnsContext {
         let sns_data = Self::get_sns_payload(context.owner_account.owner);
         let deployed_sns = Self::create_sns(context, icp_neuron_id.clone(), sns_data.clone());
 
-        Self::participate_in_sns_sale(context, deployed_sns.clone(), 5);
+        let participants = Self::participate_in_sns_sale(context, deployed_sns.clone(), 5);
 
         Self::finalize_sns_sale(context, deployed_sns.clone());
 
@@ -85,14 +87,16 @@ impl SnsContext {
             .filter(|n| n.id.clone().unwrap().id != developer_neuron_id.clone().unwrap().id)
             .collect::<Vec<_>>();
 
-        SnsContext {
+        let mut sns_context = SnsContext {
             icp_neuron_id,
             service_canister_neuron_id: None,
             sns_canisters: deployed_sns,
-            participants: vec![],
+            participants,
             developer_sns_neurons: neurons_without_developer,
             developer_neuron_id,
-        }
+        };
+
+        sns_context
     }
 
     pub fn get_sns_neuron(
@@ -164,6 +168,99 @@ impl SnsContext {
             Ok(res) => Decode!(res.as_slice(), ManageNeuronResponse).map_err(|e| e.to_string()),
             Err(e) => Err(e.to_string()),
         }
+    }
+
+    pub fn get_sns_neurons_by_participants(
+        &self,
+        context: &Context,
+        deployed_sns: DeployedSns,
+        participants: Vec<Principal>,
+    ) -> Result<Vec<(Principal, Vec<SnsNeuronId>)>, String> {
+        let mut neuron_ids: HashMap<Principal, Vec<SnsNeuronId>> = HashMap::new();
+
+        for participant in participants {
+            let args = ListNeurons {
+                of_principal: Some(participant),
+                limit: 100,
+                start_page_at: None,
+            };
+            let neuron_id = context
+                .pic
+                .query_call(
+                    deployed_sns.governance_canister_id.unwrap(),
+                    participant,
+                    "list_neurons",
+                    encode_args((args,)).unwrap(),
+                )
+                .expect("Failed to call canister");
+
+            let response = Decode!(neuron_id.as_slice(), ListNeuronsResponse)
+                .map_err(|e| e.to_string())
+                .expect("Failed to decode neuron id");
+
+            neuron_ids.insert(
+                participant,
+                response
+                    .neurons
+                    .iter()
+                    .map(|n| n.id.clone().unwrap())
+                    .collect(),
+            );
+        }
+        Ok(neuron_ids.into_iter().collect())
+    }
+
+    pub fn vote_with_participants_count(
+        &self,
+        context: &Context,
+        number_of_participants: u64,
+        proposal_id: Option<ProposalId>,
+        vote: i32,
+        include_developer: bool,
+    ) -> Result<Vec<ManageNeuronResponse>, String> {
+        let mut responses: Vec<ManageNeuronResponse> = vec![];
+
+        let mut participants: Vec<Principal> = self
+            .participants
+            .clone()
+            .into_iter()
+            .take(number_of_participants as usize)
+            .collect();
+
+        if include_developer {
+            participants.push(context.owner_account.owner);
+        }
+
+        let neuron_ids = self.get_sns_neurons_by_participants(
+            context,
+            self.sns_canisters.clone(),
+            participants,
+        )?;
+
+        let vote_args = RegisterVote {
+            proposal: proposal_id,
+            vote,
+        };
+
+        for (participant, neuron_ids) in neuron_ids {
+            for neuron_id in neuron_ids {
+                let response = self.sns_command(
+                    &context.pic,
+                    neuron_id,
+                    Command::RegisterVote(vote_args.clone()),
+                    Sender::Other(participant),
+                );
+                match response {
+                    Ok(response) => {
+                        responses.push(response.clone());
+                    }
+                    Err(e) => {
+                        println!("error: {:?}", e);
+                    }
+                }
+            }
+        }
+        Ok(responses)
     }
 
     pub fn vote_with_neurons(
@@ -492,16 +589,20 @@ impl SnsContext {
         deployed_sns
     }
 
-    fn participate_in_sns_sale(context: &Context, deployed_sns: DeployedSns, participants: u64) {
+    fn participate_in_sns_sale(
+        context: &Context,
+        deployed_sns: DeployedSns,
+        number_of_participants: u64,
+    ) -> Vec<Principal> {
         Self::get_start_function_print("participate_in_sns_sale");
 
-        for x in 0..participants {
-            let participant = if x == 0 {
-                context.owner_account.owner
-            } else {
-                generate_principal()
-            };
-            context.mint_icp(PARTICIPANT_ICP + 10_000 + 10_000, participant);
+        let mut participants = Vec::new();
+
+        for _ in 0..number_of_participants {
+            let participant = generate_principal();
+            participants.push(participant);
+
+            context.mint_icp(PARTICIPANT_ICP + 1_000_000_000 + 10_000, participant);
 
             context.pic.tick();
 
@@ -597,6 +698,7 @@ impl SnsContext {
             println!("get_buyer_state_result: {:?}", get_buyer_state_result);
             println!("--------------------------------");
         }
+        participants
     }
 
     // pub fn prepare_sns_state(&mut self, context: &Context) -> Result<(), String> {
@@ -736,6 +838,79 @@ impl SnsContext {
         Self::get_end_function_print();
     }
 
+    pub fn prepare_neurons(&self, context: &Context) -> Result<SnsNeuronId, String> {
+        Self::get_start_function_print("finalize_sns_sale");
+        let mint_sns_tokens = self.sns_command(
+            &context.pic,
+            self.developer_neuron_id.clone().unwrap(),
+            Command::MakeProposal(Proposal {
+                url: "https://example.com".to_string(),
+                title: "Test mint".to_string(),
+                summary: "Test mint".to_string(),
+                action: Some(Action::MintSnsTokens(MintSnsTokens {
+                    to_principal: Some(context.neuron_controller_canister),
+                    to_subaccount: None,
+                    memo: Some(1),
+                    amount_e8s: Some(100_010_000),
+                })),
+            }),
+            Sender::Owner,
+        )?;
+
+        println!("mint_sns_tokens: {:?}", mint_sns_tokens);
+
+        // vote for the proposal
+        let vote_result =
+            self.vote_with_participants_count(&context, 5, Some(ProposalId { id: 1 }), 1, true)?;
+        println!("vote_result: {:?}", vote_result);
+
+        let proposal_id =
+            self.get_sns_proposal(&context.pic, Some(ProposalId { id: 1 }), Sender::Owner)?;
+        println!("proposal_id: {:?}", proposal_id);
+
+        // get the balance of the neuron controller canister
+        let balance = self.get_balance(
+            &context.pic,
+            Account {
+                owner: context.neuron_controller_canister,
+                subaccount: None,
+            },
+        )?;
+
+        println!("balance: {:?}", balance);
+        assert!(balance == 100_010_000u64);
+
+        let args: NeuronType = NeuronType::Sns(SnsNeuronArgs::Create(CreateSnsNeuronArgs {
+            amount_e8s: 100_000_000,
+            auto_stake: None,
+            dissolve_delay_seconds: Some(30 * 24 * 60 * 60),
+        }));
+
+        let create_neuron = context.update::<CanisterResult<ModuleResponse>>(
+            Sender::Other(context.config.governance_canister_id),
+            "tk_service_manage_neuron",
+            Some(encode_args((args,)).unwrap()),
+        )?;
+
+        println!("result: {:?}", create_neuron);
+        assert!(create_neuron.is_ok());
+
+        let neuron_references = context.query::<CanisterResult<Vec<SnsNeuronReferenceResponse>>>(
+            Sender::Other(context.config.governance_canister_id),
+            "get_sns_neuron_references",
+            None,
+        )?;
+
+        println!("neuron_reference: {:?}", &neuron_references);
+        assert!(neuron_references.is_ok());
+        let service_canister_neuron_id = neuron_references.unwrap()[0].neuron_id.clone().unwrap();
+
+        Self::get_end_function_print();
+        Ok(SnsNeuronId {
+            id: service_canister_neuron_id,
+        })
+    }
+
     fn get_sns_neurons(
         context: &Context,
         deployed_sns: DeployedSns,
@@ -785,27 +960,27 @@ impl SnsContext {
     }),
     governance_parameters: Some(GovernanceParameters {
         neuron_maximum_dissolve_delay_bonus: Some(Percentage { basis_points: Some(10_000) }),
-        neuron_maximum_age_bonus: Some(Percentage { basis_points: Some(2_500) }),
+        neuron_maximum_age_bonus: Some(Percentage { basis_points: Some(0) }),
         neuron_minimum_stake: Some(Tokens { e8s: Some(10_000_000) }),
         neuron_maximum_age_for_age_bonus: Some(Duration { seconds: Some(4 * 365 * 24 * 60 * 60) }),
         neuron_maximum_dissolve_delay: Some(Duration { seconds: Some(8 * 365 * 24 * 60 * 60) }),
         neuron_minimum_dissolve_delay_to_vote: Some(Duration { seconds: Some(30 * 24 * 60 * 60) }),
         proposal_initial_voting_period: Some(Duration { seconds: Some(4 * 24 * 60 * 60) }),
         proposal_wait_for_quiet_deadline_increase: Some(Duration { seconds: Some(24 * 60 * 60) }),
-        proposal_rejection_fee: Some(Tokens { e8s: Some(100_000_000) }),
+        proposal_rejection_fee: Some(Tokens { e8s: Some(10_000_000) }),
         voting_reward_parameters: Some(VotingRewardParameters {
-            initial_reward_rate: Some(Percentage { basis_points: Some(1000) }),
-            final_reward_rate: Some(Percentage { basis_points: Some(225) }),
-            reward_rate_transition_duration: Some(Duration { seconds: Some(12 * 365 * 24 * 60 * 60) }),
+            initial_reward_rate: Some(Percentage { basis_points: Some(0) }),
+            final_reward_rate: Some(Percentage { basis_points: Some(0) }),
+            reward_rate_transition_duration: Some(Duration { seconds: Some(0) }),
         }),
     }),
     swap_parameters: Some(SwapParameters {
         minimum_participants: Some(5),
         neurons_fund_participation: Some(false),
-        minimum_direct_participation_icp: Some(Tokens { e8s: Some(100_000_000) }),
-        maximum_direct_participation_icp: Some(Tokens { e8s: Some(1_000_000_000_000) }),
-        minimum_participant_icp: Some(Tokens { e8s: Some(100_000_000_000) }),
-        maximum_participant_icp: Some(Tokens { e8s: Some(1_000_000_000_000) }),
+        minimum_direct_participation_icp: Some(Tokens { e8s: Some(100_000_000 * 5) }),
+        maximum_direct_participation_icp: Some(Tokens { e8s: Some(1_000_000_000 * 5) }),
+        minimum_participant_icp: Some(Tokens { e8s: Some(100_000_000) }),
+        maximum_participant_icp: Some(Tokens { e8s: Some(1_000_000_000) }),
         confirmation_text: None,
         minimum_icp: None,
         maximum_icp: None,
@@ -822,7 +997,7 @@ impl SnsContext {
     }),
     initial_token_distribution: Some(InitialTokenDistribution {
         treasury_distribution: Some(SwapDistribution {
-            total: Some(Tokens { e8s: Some(3_000_000_000) }),
+            total: Some(Tokens { e8s: Some(1_000_000_000) }),
         }),
         developer_distribution: Some(DeveloperDistribution {
             developer_neurons: vec![NeuronDistribution {
@@ -830,15 +1005,93 @@ impl SnsContext {
                 dissolve_delay: Some(Duration { seconds: Some(2 * 365 * 24 * 60 * 60) }),
                 memo: Some(0),
                 vesting_period: Some(Duration { seconds: Some(4 * 365 * 24 * 60 * 60) }),
-                stake: Some(Tokens { e8s: Some(1_000_000_000) }),
+                stake: Some(Tokens { e8s: Some(100_000_000) }),
             }],
         }),
         swap_distribution: Some(SwapDistribution {
-            total: Some(Tokens { e8s: Some(1_000_000_000) }),
+            total: Some(Tokens { e8s: Some(2_000_000_000) }),
         }),
     }),
     }
     }
+
+    // fn get_sns_payload(owner: Principal) -> CreateServiceNervousSystem {
+    //     CreateServiceNervousSystem {
+    // name: Some("Toolkit".to_string()),
+    // description: Some("Toolkit is a versatile suite for managing Service Nervous Systems (SNS) and projects on the Internet Computer. From governance proposals to canister deployment, it empowers users to innovate, collaborate, and decentralize seamlessly.".to_string()),
+    // url: Some("https://ic-toolkit.app".to_string()),
+    // logo: Some(Image {
+    //     base64_encoding: Some("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAFJElEQVR4nG2WT4slZxXGf8+puvd298z0ZDLp9BCTjAlGBnElCAoDLty6cCTgwm8gfoCAe79CNu7cKAiShW6yUBAkKEgEEYOQsZ1BkkxPt9N/771VdR4Xb1Xd23On4HKr3ve8589zznnOq//+8K4YnuDxw+bkuJMAbHZvVW/cnRjAlXmiyQ9uv31YRQBm6Xj/zqMHN48XDkA1zz7xkz9mVL2+hFoYKDaEimqBKT+QleXVoyfjq2RpJSohW4AE".to_string()),
+    // }),
+
+    // fallback_controller_principal_ids: vec![
+    //     owner
+    // ],
+    // dapp_canisters: vec![],
+    // ledger_parameters: Some(LedgerParameters {
+    //     transaction_fee: Some(Tokens { e8s: Some(10_000) }),
+    //     token_symbol: Some("TKT".to_string()),
+    //     token_logo: Some(Image {
+    //         base64_encoding: Some("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAFJElEQVR4nG2WT4slZxXGf8+puvd298z0ZDLp9BCTjAlGBnElCAoDLty6cCTgwm8gfoCAe79CNu7cKAiShW6yUBAkKEgEEYOQsZ1BkkxPt9N/771VdR4Xb1Xd23On4HKr3ve8589zznnOq//+8K4YnuDxw+bkuJMAbHZvVW/cnRjAlXmiyQ9uv31YRQBm6Xj/zqMHN48XDkA1zz7xkz9mVL2+hFoYKDaEimqBKT+QleXVoyfjq2RpJSohW4AE".to_string()),
+    //     }),
+    //     token_name: Some("Toolkit Token".to_string()),
+    // }),
+    // governance_parameters: Some(GovernanceParameters {
+    //     neuron_maximum_dissolve_delay_bonus: Some(Percentage { basis_points: Some(10_000) }),
+    //     neuron_maximum_age_bonus: Some(Percentage { basis_points: Some(2_500) }),
+    //     neuron_minimum_stake: Some(Tokens { e8s: Some(10_000_000) }),
+    //     neuron_maximum_age_for_age_bonus: Some(Duration { seconds: Some(4 * 365 * 24 * 60 * 60) }),
+    //     neuron_maximum_dissolve_delay: Some(Duration { seconds: Some(8 * 365 * 24 * 60 * 60) }),
+    //     neuron_minimum_dissolve_delay_to_vote: Some(Duration { seconds: Some(30 * 24 * 60 * 60) }),
+    //     proposal_initial_voting_period: Some(Duration { seconds: Some(4 * 24 * 60 * 60) }),
+    //     proposal_wait_for_quiet_deadline_increase: Some(Duration { seconds: Some(24 * 60 * 60) }),
+    //     proposal_rejection_fee: Some(Tokens { e8s: Some(100_000_000) }),
+    //     voting_reward_parameters: Some(VotingRewardParameters {
+    //         initial_reward_rate: Some(Percentage { basis_points: Some(1000) }),
+    //         final_reward_rate: Some(Percentage { basis_points: Some(225) }),
+    //         reward_rate_transition_duration: Some(Duration { seconds: Some(12 * 365 * 24 * 60 * 60) }),
+    //     }),
+    // }),
+    // swap_parameters: Some(SwapParameters {
+    //     minimum_participants: Some(5),
+    //     neurons_fund_participation: Some(false),
+    //     minimum_direct_participation_icp: Some(Tokens { e8s: Some(100_000_000) }),
+    //     maximum_direct_participation_icp: Some(Tokens { e8s: Some(1_000_000_000_000) }),
+    //     minimum_participant_icp: Some(Tokens { e8s: Some(100_000_000_000) }),
+    //     maximum_participant_icp: Some(Tokens { e8s: Some(1_000_000_000_000) }),
+    //     confirmation_text: None,
+    //     minimum_icp: None,
+    //     maximum_icp: None,
+    //     neurons_fund_investment_icp: None,
+    //     restricted_countries: Some(Countries {
+    //         iso_codes: vec!["AQ".to_string()],
+    //     }),
+    //     start_time: None,
+    //     duration: Some(Duration { seconds: Some(7 * 24 * 60 * 60) }),
+    //     neuron_basket_construction_parameters: Some(NeuronBasketConstructionParameters {
+    //         count: Some(3),
+    //         dissolve_delay_interval: Some(Duration { seconds: Some(30 * 24 * 60 * 60) }),
+    //     }),
+    // }),
+    // initial_token_distribution: Some(InitialTokenDistribution {
+    //     treasury_distribution: Some(SwapDistribution {
+    //         total: Some(Tokens { e8s: Some(3_000_000_000) }),
+    //     }),
+    //     developer_distribution: Some(DeveloperDistribution {
+    //         developer_neurons: vec![NeuronDistribution {
+    //             controller: Some(owner),
+    //             dissolve_delay: Some(Duration { seconds: Some(2 * 365 * 24 * 60 * 60) }),
+    //             memo: Some(0),
+    //             vesting_period: Some(Duration { seconds: Some(4 * 365 * 24 * 60 * 60) }),
+    //             stake: Some(Tokens { e8s: Some(1_000_000_000) }),
+    //         }],
+    //     }),
+    //     swap_distribution: Some(SwapDistribution {
+    //         total: Some(Tokens { e8s: Some(1_000_000_000) }),
+    //     }),
+    // }),
+    // }
+    // }
 
     fn generate_subaccount_by_nonce(nonce: u64, canister_id: Principal) -> [u8; 32] {
         let mut hasher = Sha256::new();
