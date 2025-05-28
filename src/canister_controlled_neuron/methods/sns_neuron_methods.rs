@@ -30,7 +30,7 @@ pub async fn start_chain(id: u64) -> CanisterResult<SnsChainProposalsResponse> {
 
 #[update]
 pub async fn execute_next_proposal(id: u64) -> CanisterResult<SnsChainProposalsResponse> {
-    SNSNeuronLogic::execute_next_proposal(id).await
+    SNSNeuronLogic::submit_next_proposal(id).await
 }
 
 #[query]

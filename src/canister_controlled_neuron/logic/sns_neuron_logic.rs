@@ -1,4 +1,7 @@
-use ic_cdk::api::time;
+use std::time::Duration;
+
+use ic_cdk::{api::time, futures::spawn};
+use ic_cdk_timers::set_timer;
 use toolkit_utils::{
     result::CanisterResult,
     storage::{StorageInsertable, StorageQueryable, StorageUpdateable},
@@ -122,6 +125,13 @@ impl SNSNeuronLogic {
 
         let (id, _) = SnsChainProposalsStore::insert(chain.clone())?;
 
+        if start_chain {
+            set_timer(Duration::from_secs(60 * 60), move || {
+                spawn(async move {
+                    let _ = SNSNeuronLogic::submit_next_proposal(id).await;
+                });
+            });
+        }
         Ok(chain.to_response(id))
     }
 
@@ -134,16 +144,63 @@ impl SNSNeuronLogic {
         let (_, mut chain) = SnsChainProposalsStore::get(id)?;
         chain.start_chain().await?;
         SnsChainProposalsStore::update(id, chain.clone())?;
+
+        set_timer(Duration::from_secs(60 * 60), move || {
+            spawn(async move {
+                let _ = SNSNeuronLogic::submit_next_proposal(id).await;
+            });
+        });
         Ok(chain.to_response(id))
     }
 
-    pub async fn execute_next_proposal(id: u64) -> CanisterResult<SnsChainProposalsResponse> {
+    pub async fn submit_next_proposal(id: u64) -> CanisterResult<SnsChainProposalsResponse> {
+        ic_cdk::println!("⏳ submit_next_proposal triggered for chain id: {}", id);
+
         let (_, mut chain) = SnsChainProposalsStore::get(id)?;
+        let result = chain.submit_next_proposal().await;
 
-        chain.execute_next_proposal().await?;
+        match result {
+            Ok(_) => {
+                SnsChainProposalsStore::update(id, chain.clone())?;
+                ic_cdk::println!("✅ Created proposal for index {}", chain.current_index - 1);
 
-        SnsChainProposalsStore::update(id, chain.clone())?;
-        Ok(chain.to_response(id))
+                // If more proposals remain, schedule next timer
+                if chain.current_index < chain.proposals.len() as u64 {
+                    ic_cdk::println!("📆 Scheduling next check in 1 hour for chain {}", id);
+                    set_timer(Duration::from_secs(3600), move || {
+                        spawn(async move {
+                            let _ = SNSNeuronLogic::submit_next_proposal(id).await;
+                        });
+                    });
+                } else {
+                    ic_cdk::println!("🎉 Chain {} fully processed.", id);
+                }
+
+                Ok(chain.to_response(id))
+            }
+
+            Err(e) if e.to_string().contains("Current proposal not yet executed") => {
+                ic_cdk::println!(
+                    "🕓 Proposal index {} not yet executed for chain {}, retrying in 1 hour.",
+                    chain.current_index,
+                    id
+                );
+
+                // Retry again in one hour
+                set_timer(Duration::from_secs(3600), move || {
+                    spawn(async move {
+                        let _ = SNSNeuronLogic::submit_next_proposal(id).await;
+                    });
+                });
+
+                Ok(chain.to_response(id))
+            }
+
+            Err(e) => {
+                ic_cdk::println!("❌ Error in execute_next_proposal (id {}): {:?}", id, e);
+                Err(e)
+            }
+        }
     }
 
     pub async fn add_dissolve_delay(

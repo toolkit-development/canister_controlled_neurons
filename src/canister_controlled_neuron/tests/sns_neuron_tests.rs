@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use candid::encode_args;
 use canister_controlled_neuron::{
     api::sns_governance_api::{Action, MintSnsTokens, Motion, Proposal},
@@ -424,7 +426,6 @@ fn test_create_chain_proposals_with_majority() -> Result<(), String> {
     println!("--------------------------------");
     assert!(create_chain_proposals.is_ok());
     assert!(proposal_1.proposal_id.is_some());
-    assert!(proposal_1.proposal_response.is_some());
 
     let proposal_1_check = sns.get_sns_proposal(
         &context.pic,
@@ -470,7 +471,6 @@ fn test_create_chain_proposals_with_majority() -> Result<(), String> {
     println!("--------------------------------");
     assert!(second_proposal.is_ok());
     assert!(proposal_2.proposal_id.is_some());
-    assert!(proposal_2.proposal_response.is_some());
 
     let proposal_2_check = sns.get_sns_proposal(
         &context.pic,
@@ -517,7 +517,6 @@ fn test_create_chain_proposals_with_majority() -> Result<(), String> {
 
     assert!(third_proposal.is_ok());
     assert!(proposal_3.proposal_id.is_some());
-    assert!(proposal_3.proposal_response.is_some());
 
     let proposal_3_check = sns.get_sns_proposal(
         &context.pic,
@@ -630,7 +629,6 @@ fn test_create_chain_proposals_with_manual_start_chain() -> Result<(), String> {
 
     assert!(create_chain_proposals.is_ok());
     assert!(proposal_1.proposal_id.is_some());
-    assert!(proposal_1.proposal_response.is_some());
 
     let proposal_1_check = sns.get_sns_proposal(
         &context.pic,
@@ -677,7 +675,6 @@ fn test_create_chain_proposals_with_manual_start_chain() -> Result<(), String> {
 
     assert!(second_proposal.is_ok());
     assert!(proposal_2.proposal_id.is_some());
-    assert!(proposal_2.proposal_response.is_some());
 
     let proposal_2_check = sns.get_sns_proposal(
         &context.pic,
@@ -724,7 +721,6 @@ fn test_create_chain_proposals_with_manual_start_chain() -> Result<(), String> {
 
     assert!(third_proposal.is_ok());
     assert!(proposal_3.proposal_id.is_some());
-    assert!(proposal_3.proposal_response.is_some());
 
     let proposal_3_check = sns.get_sns_proposal(
         &context.pic,
@@ -821,6 +817,26 @@ fn test_create_chain_proposals_with_treasury_request() -> Result<(), String> {
         true,
     )?;
 
+    for _ in 0..100 {
+        context.pic.tick();
+    }
+    context.pic.advance_time(Duration::from_secs(60 * 60 * 2));
+    for _ in 0..100 {
+        context.pic.tick();
+    }
+
+    let confirm_proposal_1 = context.query::<CanisterResult<SnsChainProposalsResponse>>(
+        Sender::Other(context.config.governance_canister_id),
+        "get_sns_chain_proposals",
+        Some(encode_args((&create_chain_proposals.clone().unwrap().id,)).unwrap()),
+    )?;
+
+    println!("confirm_proposal_1: {:?}", confirm_proposal_1);
+
+    // for _ in 0..100 {
+    //     context.pic.tick();
+    // }
+
     println!("--------------------------------");
     println!("--------------------------------");
     println!("proposal_1: {:?}", proposal_1.proposal_id);
@@ -828,11 +844,14 @@ fn test_create_chain_proposals_with_treasury_request() -> Result<(), String> {
         "amount of votes: (also includes failed votes) {:?}",
         vote_result.len()
     );
+    println!(
+        "current_index: {:?}",
+        create_chain_proposals.clone().unwrap().current_index
+    );
     println!("--------------------------------");
     println!("--------------------------------");
     assert!(create_chain_proposals.is_ok());
     assert!(proposal_1.proposal_id.is_some());
-    assert!(proposal_1.proposal_response.is_some());
 
     let proposal_1_check = sns.get_sns_proposal(
         &context.pic,
@@ -866,9 +885,16 @@ fn test_create_chain_proposals_with_treasury_request() -> Result<(), String> {
         false,
     )?;
 
-    println!("--------------------------------");
-    println!("--------------------------------");
+    // for _ in 0..10 {
+    //     context.pic.tick();
+    // }
 
+    println!("--------------------------------");
+    println!("--------------------------------");
+    println!(
+        "current_index: {:?}",
+        second_proposal.clone().unwrap().current_index
+    );
     println!("proposal_2: {:?}", proposal_2.proposal_id);
     println!(
         "amount of votes: (also includes failed votes) {:?}",
@@ -879,7 +905,6 @@ fn test_create_chain_proposals_with_treasury_request() -> Result<(), String> {
 
     assert!(second_proposal.is_ok());
     assert!(proposal_2.proposal_id.is_some());
-    assert!(proposal_2.proposal_response.is_some());
 
     let proposal_2_check = sns.get_sns_proposal(
         &context.pic,
@@ -913,8 +938,16 @@ fn test_create_chain_proposals_with_treasury_request() -> Result<(), String> {
         false,
     )?;
 
+    // for _ in 0..10 {
+    //     context.pic.tick();
+    // }
+
     println!("--------------------------------");
     println!("--------------------------------");
+    println!(
+        "current_index: {:?}",
+        third_proposal.clone().unwrap().current_index
+    );
     println!("proposal_3: {:?}", proposal_3.proposal_id);
     println!(
         "amount of votes: (also includes failed votes) {:?}",
@@ -925,7 +958,6 @@ fn test_create_chain_proposals_with_treasury_request() -> Result<(), String> {
 
     assert!(third_proposal.is_ok());
     assert!(proposal_3.proposal_id.is_some());
-    assert!(proposal_3.proposal_response.is_some());
 
     let proposal_3_check = sns.get_sns_proposal(
         &context.pic,
@@ -947,6 +979,263 @@ fn test_create_chain_proposals_with_treasury_request() -> Result<(), String> {
     )?;
 
     assert!(non_existing_proposal.is_err());
+    println!("--------------------------------");
+    println!("--------------------------------");
+    println!("non_existing_proposal: {:?}", non_existing_proposal);
+    println!("--------------------------------");
+    println!("--------------------------------");
+
+    Ok(())
+}
+
+#[test]
+fn test_create_chain_proposals_with_treasury_request_and_timer() -> Result<(), String> {
+    let context = Context::new(true);
+    let sns = context.sns.as_ref().unwrap();
+    let service_canister_neuron_id = sns.prepare_neurons(&context)?.id;
+
+    // these proposals will execute directly do to a majority of voting power
+    let proposals = vec![
+        PostSnsChainProposal {
+            index: 0,
+            // critical proposal (not auto accepted)
+            proposal: Proposal {
+                url: "https://example.com".to_string(),
+                title: "Test proposal 1".to_string(),
+                summary: "Test proposal 1".to_string(),
+                action: Some(Action::MintSnsTokens(MintSnsTokens {
+                    to_principal: Some(context.neuron_controller_canister),
+                    to_subaccount: None,
+                    memo: Some(1u64),
+                    amount_e8s: Some(10_000),
+                })),
+            },
+        },
+        PostSnsChainProposal {
+            index: 1,
+            proposal: Proposal {
+                url: "https://example.com".to_string(),
+                title: "Test proposal 2".to_string(),
+                summary: "Test proposal 2".to_string(),
+                action: Some(Action::Motion(Motion {
+                    motion_text: "Test proposal 2".to_string(),
+                })),
+            },
+        },
+        PostSnsChainProposal {
+            index: 2,
+            proposal: Proposal {
+                url: "https://example.com".to_string(),
+                title: "Test proposal 3".to_string(),
+                summary: "Test proposal 3".to_string(),
+                action: Some(Action::Motion(Motion {
+                    motion_text: "Test proposal 3".to_string(),
+                })),
+            },
+        },
+    ];
+
+    let create_chain_proposals = context.update::<CanisterResult<SnsChainProposalsResponse>>(
+        Sender::Other(context.config.governance_canister_id),
+        "create_chain_proposals",
+        Some(encode_args((service_canister_neuron_id, proposals, true)).unwrap()),
+    )?;
+
+    let binding = create_chain_proposals.clone().unwrap();
+    let proposal_1 = binding.proposals.iter().find(|p| p.index == 0).unwrap();
+
+    let vote_result = sns.vote_with_participants_count(
+        &context,
+        5,
+        Some(ProposalId {
+            id: proposal_1.proposal_id.unwrap(),
+        }),
+        1,
+        true,
+    )?;
+
+    for _ in 0..100 {
+        context.pic.tick();
+    }
+    context.pic.advance_time(Duration::from_secs(60 * 60 * 2));
+    for _ in 0..100 {
+        context.pic.tick();
+    }
+
+    let confirm_proposal_1 = context.query::<CanisterResult<SnsChainProposalsResponse>>(
+        Sender::Other(context.config.governance_canister_id),
+        "get_sns_chain_proposals",
+        Some(encode_args((&create_chain_proposals.clone().unwrap().id,)).unwrap()),
+    )?;
+
+    println!("confirm_proposal_1: {:?}", confirm_proposal_1);
+
+    println!("--------------------------------");
+    println!("--------------------------------");
+    println!("proposal_1: {:?}", proposal_1.proposal_id);
+    println!(
+        "amount of votes: (also includes failed votes) {:?}",
+        vote_result.len()
+    );
+    println!(
+        "current_index: {:?}",
+        create_chain_proposals.clone().unwrap().current_index
+    );
+    println!("--------------------------------");
+    println!("--------------------------------");
+    assert!(create_chain_proposals.is_ok());
+    assert!(proposal_1.proposal_id.is_some());
+
+    let proposal_1_check = sns.get_sns_proposal(
+        &context.pic,
+        Some(ProposalId {
+            id: proposal_1.proposal_id.unwrap(),
+        }),
+        Sender::Other(context.config.governance_canister_id),
+    )?;
+
+    assert!(matches!(
+        proposal_1_check.result,
+        Some(Result1::Proposal(ref proposal)) if proposal.executed_timestamp_seconds > 0
+    ));
+
+    for _ in 0..100 {
+        context.pic.tick();
+    }
+    context.pic.advance_time(Duration::from_secs(60 * 60 * 2));
+    for _ in 0..100 {
+        context.pic.tick();
+    }
+
+    let second_proposal = context.update::<CanisterResult<SnsChainProposalsResponse>>(
+        Sender::Other(context.config.governance_canister_id),
+        "get_sns_chain_proposals",
+        Some(encode_args((&create_chain_proposals.clone().unwrap().id,)).unwrap()),
+    )?;
+
+    let binding = second_proposal.clone().unwrap();
+    let proposal_2 = binding.proposals.iter().find(|p| p.index == 1).unwrap();
+
+    let vote_result = sns.vote_with_participants_count(
+        &context,
+        3,
+        Some(ProposalId {
+            id: proposal_2.proposal_id.unwrap(),
+        }),
+        1,
+        false,
+    )?;
+
+    for _ in 0..100 {
+        context.pic.tick();
+    }
+    context.pic.advance_time(Duration::from_secs(60 * 60 * 2));
+    for _ in 0..100 {
+        context.pic.tick();
+    }
+
+    println!("--------------------------------");
+    println!("--------------------------------");
+    println!(
+        "current_index: {:?}",
+        second_proposal.clone().unwrap().current_index
+    );
+    println!("proposal_2: {:?}", proposal_2.proposal_id);
+    println!(
+        "amount of votes: (also includes failed votes) {:?}",
+        vote_result.len()
+    );
+    println!("--------------------------------");
+    println!("--------------------------------");
+
+    assert!(second_proposal.is_ok());
+    assert!(proposal_2.proposal_id.is_some());
+
+    let proposal_2_check = sns.get_sns_proposal(
+        &context.pic,
+        Some(ProposalId {
+            id: proposal_2.proposal_id.unwrap(),
+        }),
+        Sender::Other(context.config.governance_canister_id),
+    )?;
+
+    assert!(matches!(
+        proposal_2_check.result,
+        Some(Result1::Proposal(ref proposal)) if proposal.executed_timestamp_seconds > 0
+    ));
+
+    for _ in 0..100 {
+        context.pic.tick();
+    }
+    context.pic.advance_time(Duration::from_secs(60 * 60 * 2));
+    for _ in 0..100 {
+        context.pic.tick();
+    }
+
+    let third_proposal = context.update::<CanisterResult<SnsChainProposalsResponse>>(
+        Sender::Other(context.config.governance_canister_id),
+        "get_sns_chain_proposals",
+        Some(encode_args((&create_chain_proposals.clone().unwrap().id,)).unwrap()),
+    )?;
+
+    let binding = third_proposal.clone().unwrap();
+    let proposal_3 = binding.proposals.iter().find(|p| p.index == 2).unwrap();
+
+    let vote_result = sns.vote_with_participants_count(
+        &context,
+        3,
+        Some(ProposalId {
+            id: proposal_3.proposal_id.unwrap(),
+        }),
+        1,
+        false,
+    )?;
+
+    for _ in 0..100 {
+        context.pic.tick();
+    }
+    context.pic.advance_time(Duration::from_secs(60 * 60 * 2));
+    for _ in 0..100 {
+        context.pic.tick();
+    }
+
+    println!("--------------------------------");
+    println!("--------------------------------");
+    println!(
+        "current_index: {:?}",
+        third_proposal.clone().unwrap().current_index
+    );
+    println!("proposal_3: {:?}", proposal_3.proposal_id);
+    println!(
+        "amount of votes: (also includes failed votes) {:?}",
+        vote_result.len()
+    );
+    println!("--------------------------------");
+    println!("--------------------------------");
+
+    assert!(third_proposal.is_ok());
+    assert!(proposal_3.proposal_id.is_some());
+
+    let proposal_3_check = sns.get_sns_proposal(
+        &context.pic,
+        Some(ProposalId {
+            id: proposal_3.proposal_id.unwrap(),
+        }),
+        Sender::Other(context.config.governance_canister_id),
+    )?;
+
+    assert!(matches!(
+        proposal_3_check.result,
+        Some(Result1::Proposal(ref proposal)) if proposal.executed_timestamp_seconds > 0
+    ));
+
+    let non_existing_proposal = context.update::<CanisterResult<SnsChainProposalsResponse>>(
+        Sender::Other(context.config.governance_canister_id),
+        "get_sns_chain_proposals",
+        Some(encode_args((&create_chain_proposals.clone().unwrap().id,)).unwrap()),
+    )?;
+
+    assert!(non_existing_proposal.is_ok());
     println!("--------------------------------");
     println!("--------------------------------");
     println!("non_existing_proposal: {:?}", non_existing_proposal);
