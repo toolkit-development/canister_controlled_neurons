@@ -268,7 +268,7 @@ pub enum TransferError {
 }
 
 #[derive(CandidType, Deserialize)]
-pub enum Result_ {
+pub enum SnsLedgerResult_ {
     Ok(candid::Nat),
     Err(TransferError),
 }
@@ -546,7 +546,7 @@ impl SnsLedgerApi {
     pub async fn icrc_1_total_supply(&self) -> Result<(candid::Nat,)> {
         ic_cdk::call(self.0, "icrc1_total_supply", ()).await
     }
-    pub async fn icrc_1_transfer(&self, arg0: TransferArg) -> Result<(Result_,)> {
+    pub async fn icrc_1_transfer(&self, arg0: TransferArg) -> Result<(SnsLedgerResult_,)> {
         ic_cdk::call(self.0, "icrc1_transfer", (arg0,)).await
     }
     pub async fn icrc_21_canister_call_consent_message(

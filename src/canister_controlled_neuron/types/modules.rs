@@ -9,6 +9,7 @@ use crate::api::{
 use super::{
     args::{icp_neuron_args::IcpNeuronArgs, sns_neuron_args::SnsNeuronArgs},
     icp_neuron_reference::IcpNeuronReferenceResponse,
+    sns_chain_proposals::SnsChainProposalsResponse,
     sns_neuron_reference::SnsNeuronReferenceResponse,
 };
 
@@ -28,4 +29,5 @@ pub enum ModuleResponse {
     ManageNeuronResponse(Box<ManageNeuronResponse>),
     MakeProposalResponse(Box<MakeProposalResponse>),
     GetProposalResponse(Box<GetProposal>),
+    SnsChainProposalsResponse(Box<SnsChainProposalsResponse>),
 }

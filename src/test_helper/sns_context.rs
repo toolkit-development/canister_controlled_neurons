@@ -699,85 +699,6 @@ impl SnsContext {
         participants
     }
 
-    // pub fn prepare_sns_state(&mut self, context: &Context) -> Result<(), String> {
-    //     // let sns = self.as_mut().unwrap();
-    //     // mint tokens for the neuron controller canister
-    //     let mint_sns_tokens = self.sns_command(
-    //         &context.pic,
-    //         self.developer_neuron_id.clone().unwrap(),
-    //         Command::MakeProposal(Proposal {
-    //             url: "https://example.com".to_string(),
-    //             title: "Test mint".to_string(),
-    //             summary: "Test mint".to_string(),
-    //             action: Some(Action::MintSnsTokens(MintSnsTokens {
-    //                 to_principal: Some(context.neuron_controller_canister),
-    //                 to_subaccount: None,
-    //                 memo: Some(1),
-    //                 amount_e8s: Some(10_000_000_000),
-    //             })),
-    //         }),
-    //         Sender::Owner,
-    //     )?;
-
-    //     println!("mint_sns_tokens: {:?}", mint_sns_tokens);
-
-    //     // vote for the proposal
-    //     let vote_result = self.vote_with_neurons(
-    //         &context.pic,
-    //         Some(ProposalId { id: 1 }),
-    //         self.developer_sns_neurons
-    //             .iter()
-    //             .map(|n| n.id.clone().unwrap())
-    //             .collect(),
-    //         1,
-    //         false,
-    //     )?;
-    //     println!("vote_result: {:?}", vote_result);
-
-    //     let proposal_id =
-    //         self.get_sns_proposal(&context.pic, Some(ProposalId { id: 1 }), Sender::Owner)?;
-    //     println!("proposal_id: {:?}", proposal_id);
-
-    //     // get the balance of the neuron controller canister
-    //     let balance = self.get_balance(
-    //         &context.pic,
-    //         Account {
-    //             owner: context.neuron_controller_canister,
-    //             subaccount: None,
-    //         },
-    //     )?;
-
-    //     println!("balance: {:?}", balance);
-    //     assert!(balance == 10_000_000_000u64);
-
-    //     let args: NeuronType = NeuronType::Sns(SnsNeuronArgs::Create(CreateSnsNeuronArgs {
-    //         amount_e8s: 1_000_000_000,
-    //         auto_stake: None,
-    //         dissolve_delay_seconds: Some(255_000_000),
-    //     }));
-
-    //     let create_neuron = context.update::<CanisterResult<ModuleResponse>>(
-    //         Sender::Other(context.config.governance_canister_id),
-    //         "tk_service_manage_neuron",
-    //         Some(encode_args((args,)).unwrap()),
-    //     )?;
-
-    //     println!("result: {:?}", create_neuron);
-    //     assert!(create_neuron.is_ok());
-
-    //     let neuron_references = context.query::<CanisterResult<Vec<SnsNeuronReferenceResponse>>>(
-    //         Sender::Other(context.config.governance_canister_id),
-    //         "get_sns_neuron_references",
-    //         None,
-    //     )?;
-
-    //     println!("neuron_reference: {:?}", &neuron_references);
-    //     assert!(neuron_references.is_ok());
-    //     let neuron_id = neuron_references.unwrap()[0].neuron_id.clone().unwrap();
-    //     self.service_canister_neuron_id = Some(SnsNeuronId { id: neuron_id });
-    //     Ok(())
-    // }
-
     // could be improved with https://github.com/dfinity/ic/blob/1b05fbe93d6cc035bdd48ee86a9a3a70406af7e1/rs/nervous_system/integration_tests/src/pocket_ic_helpers.rs#L2833
     // https://github.com/dfinity/ic/blob/1b05fbe93d6cc035bdd48ee86a9a3a70406af7e1/rs/nervous_system/integration_tests/src/pocket_ic_helpers.rs#L2743
     fn finalize_sns_sale(context: &Context, deployed_sns: DeployedSns) {
@@ -836,8 +757,13 @@ impl SnsContext {
         Self::get_end_function_print();
     }
 
-    pub fn prepare_neurons(&self, context: &Context) -> Result<SnsNeuronId, String> {
-        Self::get_start_function_print("finalize_sns_sale");
+    pub fn prepare_neurons(
+        &self,
+        context: &Context,
+        neuron_stake: Option<u64>,
+        dissolve_delay: Option<u64>,
+    ) -> Result<SnsNeuronId, String> {
+        Self::get_start_function_print("prepare_neurons");
         let mint_sns_tokens = self.sns_command(
             &context.pic,
             self.developer_neuron_id.clone().unwrap(),
@@ -849,7 +775,7 @@ impl SnsContext {
                     to_principal: Some(context.neuron_controller_canister),
                     to_subaccount: None,
                     memo: Some(1),
-                    amount_e8s: Some(100_010_000),
+                    amount_e8s: Some(neuron_stake.unwrap_or(100_000_000) + 10_000),
                 })),
             }),
             Sender::Owner,
@@ -876,12 +802,12 @@ impl SnsContext {
         )?;
 
         println!("balance: {:?}", balance);
-        assert!(balance == 100_010_000u64);
+        assert!(balance == neuron_stake.unwrap_or(100_000_000) + 10_000);
 
         let args: NeuronType = NeuronType::Sns(SnsNeuronArgs::Create(CreateSnsNeuronArgs {
-            amount_e8s: 100_000_000,
+            amount_e8s: neuron_stake.unwrap_or(100_000_000),
             auto_stake: None,
-            dissolve_delay_seconds: Some(30 * 24 * 60 * 60),
+            dissolve_delay_seconds: Some(dissolve_delay.unwrap_or(30 * 24 * 60 * 60)),
         }));
 
         let create_neuron = context.update::<CanisterResult<ModuleResponse>>(
@@ -965,7 +891,7 @@ impl SnsContext {
         neuron_minimum_dissolve_delay_to_vote: Some(Duration { seconds: Some(30 * 24 * 60 * 60) }),
         proposal_initial_voting_period: Some(Duration { seconds: Some(4 * 24 * 60 * 60) }),
         proposal_wait_for_quiet_deadline_increase: Some(Duration { seconds: Some(24 * 60 * 60) }),
-        proposal_rejection_fee: Some(Tokens { e8s: Some(10_000_000) }),
+        proposal_rejection_fee: Some(Tokens { e8s: Some(11_000_000) }),
         voting_reward_parameters: Some(VotingRewardParameters {
             initial_reward_rate: Some(Percentage { basis_points: Some(0) }),
             final_reward_rate: Some(Percentage { basis_points: Some(0) }),

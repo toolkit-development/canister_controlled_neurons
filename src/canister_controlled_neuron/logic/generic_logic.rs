@@ -17,7 +17,7 @@ impl GenericLogic {
     pub async fn tk_service_validate_manage_neuron(module: NeuronType) -> CanisterResult<String> {
         match module {
             NeuronType::Icp(data) => ICPNeuronLogic::validate_icp_neuron_args(data).await,
-            NeuronType::Sns(_) => Ok("".to_string()),
+            NeuronType::Sns(data) => SNSNeuronLogic::validate_sns_neuron_args(data).await,
         }
     }
 }

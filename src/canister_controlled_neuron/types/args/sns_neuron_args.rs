@@ -1,7 +1,10 @@
 use candid::CandidType;
 use serde::{Deserialize, Serialize};
 
-use crate::api::sns_governance_api::{Proposal, Topic};
+use crate::{
+    api::sns_governance_api::{Proposal, Topic},
+    types::sns_chain_proposals::PostSnsChainProposal,
+};
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
@@ -16,6 +19,21 @@ pub enum SnsNeuronArgs {
     Vote(VoteSnsNeuronArgs),
     Disburse(DisburseSnsNeuronArgs),
     SetFollowing(SetSnsNeuronFollowingArgs),
+    CreateChainProposals(CreateSnsChainProposalsArgs),
+    StartChain(StartChainArgs),
+}
+
+#[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
+pub struct CreateSnsChainProposalsArgs {
+    pub neuron_id: Vec<u8>,
+    pub proposals: Vec<PostSnsChainProposal>,
+    pub start_chain: bool,
+}
+
+#[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
+pub struct StartChainArgs {
+    pub neuron_id: Vec<u8>,
+    pub id: u64,
 }
 
 #[derive(Debug, CandidType, Serialize, Deserialize, Clone)]

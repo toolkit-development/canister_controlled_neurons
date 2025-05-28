@@ -1,8 +1,9 @@
-use std::time::Duration;
+use std::{collections::HashSet, time::Duration};
 
 use ic_cdk::{api::time, futures::spawn};
 use ic_cdk_timers::set_timer;
 use toolkit_utils::{
+    api_error::ApiError,
     result::CanisterResult,
     storage::{StorageInsertable, StorageQueryable, StorageUpdateable},
 };
@@ -117,6 +118,25 @@ impl SNSNeuronLogic {
         proposals: Vec<PostSnsChainProposal>,
         start_chain: bool,
     ) -> CanisterResult<SnsChainProposalsResponse> {
+        if proposals.len() < 2 {
+            return Err(ApiError::bad_request("At least 2 proposals are required"));
+        }
+
+        // make sure the indexes are unique
+        let mut indexes = HashSet::new();
+        for proposal in &proposals {
+            if indexes.contains(&proposal.index) {
+                return Err(ApiError::bad_request("Proposal indexes must be unique"));
+            }
+            indexes.insert(proposal.index);
+        }
+
+        let (_, neuron) = SnsNeuronReferenceStore::get_by_id(neuron_id.clone())?;
+
+        if !neuron.is_eligible().await? {
+            return Err(ApiError::bad_request("Neuron is not eligible"));
+        }
+
         let mut chain = SnsChainProposals::new(neuron_id, proposals);
 
         if start_chain {
@@ -142,6 +162,11 @@ impl SNSNeuronLogic {
 
     pub async fn start_chain(id: u64) -> CanisterResult<SnsChainProposalsResponse> {
         let (_, mut chain) = SnsChainProposalsStore::get(id)?;
+
+        if chain.active_proposal_id.is_some() {
+            return Err(ApiError::bad_request("Chain already started"));
+        }
+
         chain.start_chain().await?;
         SnsChainProposalsStore::update(id, chain.clone())?;
 
@@ -418,84 +443,23 @@ impl SNSNeuronLogic {
             SnsNeuronArgs::Vote(_) => Ok(ModuleResponse::Boolean(true)),
             SnsNeuronArgs::Disburse(_) => Ok(ModuleResponse::Boolean(true)),
             SnsNeuronArgs::SetFollowing(_) => Ok(ModuleResponse::Boolean(true)),
+            SnsNeuronArgs::CreateChainProposals(create_sns_chain_proposals_args) => {
+                let result = SNSNeuronLogic::create_chain_proposals(
+                    create_sns_chain_proposals_args.neuron_id,
+                    create_sns_chain_proposals_args.proposals,
+                    create_sns_chain_proposals_args.start_chain,
+                )
+                .await?;
+                Ok(ModuleResponse::SnsChainProposalsResponse(Box::new(result)))
+            }
+            SnsNeuronArgs::StartChain(start_chain_args) => {
+                let result = SNSNeuronLogic::start_chain(start_chain_args.id).await?;
+                Ok(ModuleResponse::SnsChainProposalsResponse(Box::new(result)))
+            }
         }
     }
 
-    // pub async fn validate_icp_neuron_args(args: IcpNeuronArgs) -> CanisterResult<String> {
-    //     match args {
-    //         IcpNeuronArgs::Create(args) => {
-    //             let balance = get_icp_balance(canister_self()).await?;
-    //             if balance.e8s() < args.amount_e8s {
-    //                 return Err(ApiError::bad_request("Insufficient balance"));
-    //             }
-
-    //             if args.amount_e8s < 100_010_000 {
-    //                 return Err(ApiError::bad_request(
-    //                     "Amount must be greater than 1 ICP + fee",
-    //                 ));
-    //             }
-    //             Ok(serde_json::to_string(&args).unwrap())
-    //         }
-    //         IcpNeuronArgs::TopUp(args) => {
-    //             IcpNeuronReferenceStore::get_by_identifier(&args.identifier)?;
-    //             SNSNeuronLogic::get_full_neuron(&args.identifier).await?;
-    //             let balance = get_icp_balance(canister_self()).await?;
-    //             if balance.e8s() < args.amount_e8s {
-    //                 return Err(ApiError::bad_request("Insufficient balance"));
-    //             }
-
-    //             if args.amount_e8s < 100_010_000 {
-    //                 return Err(ApiError::bad_request(
-    //                     "Amount must be greater than 1 ICP + fee",
-    //                 ));
-    //             }
-    //             Ok(serde_json::to_string(&args).unwrap())
-    //         }
-    //         IcpNeuronArgs::AddDissolveDelay(args) => {
-    //             IcpNeuronReferenceStore::get_by_identifier(&args.identifier)?;
-    //             SNSNeuronLogic::get_full_neuron(&args.identifier).await?;
-    //             Ok(serde_json::to_string(&args).unwrap())
-    //         }
-    //         IcpNeuronArgs::SetDissolveState(args) => {
-    //             IcpNeuronReferenceStore::get_by_identifier(&args.identifier)?;
-    //             SNSNeuronLogic::get_full_neuron(&args.identifier).await?;
-    //             Ok(serde_json::to_string(&args).unwrap())
-    //         }
-    //         IcpNeuronArgs::AutoStake(args) => {
-    //             IcpNeuronReferenceStore::get_by_identifier(&args.identifier)?;
-    //             SNSNeuronLogic::get_full_neuron(&args.identifier).await?;
-    //             Ok(serde_json::to_string(&args).unwrap())
-    //         }
-    //         IcpNeuronArgs::Spawn(args) => {
-    //             IcpNeuronReferenceStore::get_by_identifier(&args.identifier)?;
-    //             let neuron = SNSNeuronLogic::get_full_neuron(&args.identifier).await?;
-    //             if neuron.maturity_e8s_equivalent < 100000000 {
-    //                 return Err(ApiError::bad_request(
-    //                     "neuron must have at least 1 ICP in maturity to spawn",
-    //                 ));
-    //             }
-    //             Ok(serde_json::to_string(&args).unwrap())
-    //         }
-    //         IcpNeuronArgs::CreateProposal(create_proposal_args) => {
-    //             IcpNeuronReferenceStore::get_by_identifier(&create_proposal_args.identifier)?;
-    //             SNSNeuronLogic::get_full_neuron(&create_proposal_args.identifier).await?;
-    //             Ok(serde_json::to_string(&create_proposal_args).unwrap())
-    //         }
-    //         IcpNeuronArgs::Vote(vote_args) => {
-    //             IcpNeuronReferenceStore::get_by_identifier(&vote_args.identifier)?;
-    //             SNSNeuronLogic::get_full_neuron(&vote_args.identifier).await?;
-    //             Ok(serde_json::to_string(&vote_args).unwrap())
-    //         }
-    //         IcpNeuronArgs::Disburse(disburse_args) => {
-    //             IcpNeuronReferenceStore::get_by_identifier(&disburse_args.identifier)?;
-    //             SNSNeuronLogic::get_full_neuron(&disburse_args.identifier).await?;
-    //             Ok(serde_json::to_string(&disburse_args).unwrap())
-    //         }
-    //         IcpNeuronArgs::SetFollowing(set_following_args) => {
-    //             IcpNeuronReferenceStore::get_by_identifier(&set_following_args.identifier)?;
-    //             SNSNeuronLogic::get_full_neuron(&set_following_args.identifier).await?;
-    //             Ok(serde_json::to_string(&set_following_args).unwrap())
-    //         }
-    //     }
-    // }
+    pub async fn validate_sns_neuron_args(args: SnsNeuronArgs) -> CanisterResult<String> {
+        Ok(serde_json::to_string(&args).unwrap())
+    }
 }

@@ -11,10 +11,10 @@ use crate::{
         api_clients::ApiClients,
         sns_governance_api::{
             By, ChangeAutoStakeMaturity, ClaimOrRefresh, ClaimOrRefreshResponse, Command, Command1,
-            Configure, GetProposal, IncreaseDissolveDelay, ManageNeuron, MemoAndController,
-            Operation, Proposal,
+            Configure, DissolveState, GetNeuron, GetProposal, IncreaseDissolveDelay, ManageNeuron,
+            MemoAndController, NeuronId, Operation, Proposal, Result_,
         },
-        sns_ledger_api::{Account, Result_, TransferArg},
+        sns_ledger_api::{Account, SnsLedgerResult_, TransferArg},
     },
     helpers::subaccount_helper::generate_subaccount_by_nonce,
     storage::{
@@ -92,7 +92,7 @@ impl SnsNeuronReference {
             })?;
 
         match result.0 {
-            Result_::Ok(result) => {
+            SnsLedgerResult_::Ok(result) => {
                 let neuron = SnsNeuronReference {
                     blockheight: result,
                     subaccount,
@@ -103,12 +103,57 @@ impl SnsNeuronReference {
 
                 Ok(neuron)
             }
-            Result_::Err(e) => {
+            SnsLedgerResult_::Err(e) => {
                 let _ = LogStore::insert(format!("{}: Error creating SNS neuron: {:?}", time(), e));
                 Err(ApiError::external_service_error(
                     "Error creating SNS neuron",
                 ))
             }
+        }
+    }
+
+    pub async fn is_eligible(&self) -> CanisterResult<bool> {
+        let governance_client = ApiClients::sns_governance();
+
+        let (governance_params,) = governance_client
+            .get_nervous_system_parameters(())
+            .await
+            .map_err(|(_, e)| ApiError::external_service_error(e.as_str()))?;
+
+        let required_minimum_stake = governance_params.neuron_minimum_stake_e8s.unwrap_or(0);
+        let required_dissolve_delay = governance_params
+            .neuron_minimum_dissolve_delay_to_vote_seconds
+            .unwrap_or(0);
+        let reject_cost = governance_params.reject_cost_e8s.unwrap_or(0);
+
+        let (neuron,) = governance_client
+            .get_neuron(GetNeuron {
+                neuron_id: Some(NeuronId {
+                    id: self.neuron_id.clone().unwrap(),
+                }),
+            })
+            .await
+            .map_err(|(_, e)| ApiError::external_service_error(e.as_str()))?;
+
+        match neuron.result {
+            Some(Result_::Neuron(neuron)) => {
+                let stake = neuron.cached_neuron_stake_e8s;
+                let dissolve_delay = match neuron.dissolve_state.unwrap() {
+                    DissolveState::DissolveDelaySeconds(delay) => delay,
+                    DissolveState::WhenDissolvedTimestampSeconds(timestamp) => {
+                        let now = time() / 1_000_000_000; // Convert nanoseconds to seconds
+                        timestamp - now
+                    }
+                };
+
+                Ok(stake >= required_minimum_stake
+                    && dissolve_delay >= required_dissolve_delay
+                    && stake >= reject_cost)
+            }
+            Some(Result_::Error(e)) => {
+                Err(ApiError::external_service_error(e.error_message.as_str()))
+            }
+            None => Err(ApiError::external_service_error("Neuron not found")),
         }
     }
 
@@ -162,8 +207,8 @@ impl SnsNeuronReference {
             })?;
 
         match result.0 {
-            Result_::Ok(result) => Ok(result),
-            Result_::Err(e) => {
+            SnsLedgerResult_::Ok(result) => Ok(result),
+            SnsLedgerResult_::Err(e) => {
                 let _ = LogStore::insert(format!("{}: Error top up SNS neuron: {:?}", time(), e));
                 Err(ApiError::external_service_error("Error top up SNS neuron"))
             }
