@@ -4,7 +4,7 @@ use toolkit_utils::result::CanisterResult;
 use crate::{
     logic::service_canisters_logic::ServiceCanistersLogic,
     misc::utils::check_authorized_principal,
-    types::service_canisters::{GovernanceCanisterId, RootCanisterId, ServiceCanisterId, ServiceCanisterModules},
+    types::service_canisters::{GovernanceCanisterId, ServiceCanisterId},
 };
 
 #[query]
@@ -20,12 +20,6 @@ pub fn set_service_canisters(
     check_authorized_principal(msg_caller())?;
     ServiceCanistersLogic::set_service_canisters(governance_canister_id, service_canister_id);
     Ok(())
-}
-
-#[update]
-pub async fn propose_purchase_modules(root_canister_id: RootCanisterId, proposal_id: u64, modules: ServiceCanisterModules) -> CanisterResult<()> {
-    // TODO: check that the caller is an authorized principal
-    ServiceCanistersLogic::propose_purchase_modules(root_canister_id, proposal_id, modules).await
 }
 
 #[update]

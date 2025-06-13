@@ -13,6 +13,7 @@ pub fn __get_candid_interface_tmp_hack() -> String {
     use crate::types::service_canisters::{
         GovernanceCanisterId, RootCanisterId, ServiceCanisterId, ServiceCanisterModules,
     };
+    use crate::types::proposal::PurchaseModulesProposalData;
     use toolkit_utils::result::CanisterResult;
     export_service!();
     __export_service()
