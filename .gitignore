@@ -24,3 +24,4 @@ dist/
 
 # environment variables
 .env
+src/test_helper/nns_state.tar.gz
