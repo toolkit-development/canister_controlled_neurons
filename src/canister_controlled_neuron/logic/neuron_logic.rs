@@ -364,6 +364,10 @@ impl NeuronLogic {
                     }
                     Ok(ModuleResponse::Boolean(true))
                 }
+                IcpNeuronArgs::Command(args) => {
+                    let result = NeuronLogic::command_neuron(args.subaccount, args.command).await?;
+                    Ok(ModuleResponse::ManageNeuronResponse(Box::new(result)))
+                }
             },
         }
     }
@@ -444,6 +448,7 @@ impl NeuronLogic {
                     NeuronLogic::get_full_neuron(set_following_args.subaccount).await?;
                     Ok(serde_json::to_string(&set_following_args).unwrap())
                 }
+                IcpNeuronArgs::Command(args) => Ok(serde_json::to_string(&args).unwrap()),
             },
         }
     }

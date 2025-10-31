@@ -7,16 +7,6 @@ use crate::api::icp_governance_api::{
 
 use super::{neuron_reference::NeuronReferenceResponse, topic::Topic};
 
-// #[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
-// pub enum Module {
-//     TreasuryManagement(TreasuryManagementModuleType),
-// }
-
-// #[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
-// pub enum TreasuryManagementModuleType {
-//     Neuron(NeuronType),
-// }
-
 #[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
 pub enum NeuronType {
     Icp(IcpNeuronArgs),
@@ -34,6 +24,7 @@ pub enum IcpNeuronArgs {
     Vote(VoteArgs),
     Disburse(DisburseArgs),
     SetFollowing(SetFollowingArgs),
+    Command(CommandNeuronArgs),
 }
 
 #[derive(Debug, CandidType, Serialize, Deserialize, Clone)]
