@@ -1,0 +1,26 @@
+[package]
+name = "service_index"
+description = "A canister to manage all service canisters"
+version = "0.1.0"
+authors = ["rem.codes"]
+license = "MIT"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+path="lib.rs"
+
+
+[dependencies]
+candid = {workspace = true}
+ic-cdk = {workspace = true}
+ic-stable-structures = {workspace = true}
+serde = { workspace = true}
+serde_json = {workspace = true}
+ic-ledger-types = {workspace = true}
+toolkit-utils = {workspace = true}
+serde_bytes = "0.11.17"
+
+[dev-dependencies]
+pocket-ic = {workspace = true}
+test_helper = {workspace = true}

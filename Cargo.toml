@@ -2,6 +2,7 @@
 members = [
     "src/test_helper",
     "src/canister_controlled_neuron",
+    "src/service_index",
     ]
 resolver = "2"
 
