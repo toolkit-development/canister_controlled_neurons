@@ -1,0 +1,19 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Build
+        uses: ./.github/actions/build
+        with:
+          lint: true
+          test: true
+          gzip: true
+          package: canister_controlled_neuron
